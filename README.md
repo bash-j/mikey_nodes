@@ -14,6 +14,8 @@ This node allows you to enter your own aspect ratio or image size from wherever,
 
 This node is a bandaid fix for Mikey's 3060 6GB graphics card to keep VRAM usage below 6GB.
 
+You shouldn't need this anymore since there was an update to comfyui to fix the issue.
+
 ## Installation
 
 To use these nodes, simply copy the contents of this repository into your ComfyUI custom nodes folder.
