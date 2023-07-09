@@ -6,9 +6,7 @@ import torch
 from comfy.model_management import unload_model, soft_empty_cache
 
 class VAEDecode6GB:
-    def __init__(self):
-        pass
-    
+    """ deprecated. update comfy to fix issue. """
     @classmethod
     def INPUT_TYPES(s):
         return {'required': {'vae': ('VAE',),
@@ -87,7 +85,6 @@ class EmptyLatentRatioCustom:
         return ({"samples":latent}, )
 
 NODE_CLASS_MAPPINGS = {
-    'VAE Decode 6GB': VAEDecode6GB,
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
     'Empty Latent Ratio Custom SDXL': EmptyLatentRatioCustom,
 }
