@@ -5,21 +5,6 @@ import torch
 
 from comfy.model_management import unload_model, soft_empty_cache
 
-class VAEDecode6GB:
-    """ deprecated. update comfy to fix issue. """
-    @classmethod
-    def INPUT_TYPES(s):
-        return {'required': {'vae': ('VAE',),
-                             'samples': ('LATENT',)}}
-    RETURN_TYPES = ('IMAGE',)
-    FUNCTION = 'decode'
-    CATEGORY = 'sdxl'
-
-    def decode(self, vae, samples):
-        unload_model()
-        soft_empty_cache()
-        return (vae.decode(samples['samples']), )
-
 class EmptyLatentRatioSelector:
     ratio_sizes = ['1:1','5:4','4:3','3:2','16:9','21:9','4:5','3:4','2:3','9:16','9:21','5:7','7:5']
     ratio_dict = {'1:1': (1024, 1024),
@@ -84,7 +69,23 @@ class EmptyLatentRatioCustom:
         latent = torch.zeros([batch_size, 4, h // 8, w // 8])
         return ({"samples":latent}, )
 
+class VAEDecode6GB:
+    """ deprecated. update comfy to fix issue. """
+    @classmethod
+    def INPUT_TYPES(s):
+        return {'required': {'vae': ('VAE',),
+                             'samples': ('LATENT',)}}
+    RETURN_TYPES = ('IMAGE',)
+    FUNCTION = 'decode'
+    CATEGORY = 'sdxl'
+
+    def decode(self, vae, samples):
+        unload_model()
+        soft_empty_cache()
+        return (vae.decode(samples['samples']), )
+
 NODE_CLASS_MAPPINGS = {
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
     'Empty Latent Ratio Custom SDXL': EmptyLatentRatioCustom,
+    'VAE Decode 6GB SDXL (deprecated)': VAEDecode6GB,
 }
