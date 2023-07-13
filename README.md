@@ -18,7 +18,9 @@ You shouldn't need this anymore since there was an update to comfyui to fix the 
 
 ## Installation
 
-To use these nodes, simply copy the contents of this repository into your ComfyUI custom nodes folder.
+To use these nodes, simply open a terminal in ComfyUI/custom_nodes/ and run:
+
+`git pull https://github.com/bash-j/mikey_nodes`
 
 ## License
 
