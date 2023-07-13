@@ -11,7 +11,29 @@ from PIL.PngImagePlugin import PngInfo
 import torch
 
 from comfy.model_management import unload_model, soft_empty_cache
+import comfy.utils
 import folder_paths
+
+def sdxl_size(width: int, height: int) -> (int, int):
+        # solver
+        w = 0
+        h = 0
+        for i in range(1, 256):
+            for j in range(1, 256):
+                if Fraction(8 * i, 8 * j) > Fraction(width, height) * 0.98 and Fraction(8 * i, 8 * j) < Fraction(width, height) and 8 * i * 8 * j <= 1024 * 1024:
+                    if (ceil(8 * i / 64) * 64) * (ceil(8 * j / 64) * 64) <= 1024 * 1024:
+                        w = ceil(8 * i / 64) * 64
+                        h = ceil(8 * j / 64) * 64
+                    elif (8 * i // 64 * 64) * (ceil(8 * j / 64) * 64) <= 1024 * 1024:
+                        w = 8 * i // 64 * 64
+                        h = ceil(8 * j / 64) * 64
+                    elif (ceil(8 * i / 64) * 64) * (8 * j // 64 * 64) <= 1024 * 1024:
+                        w = ceil(8 * i / 64) * 64
+                        h = 8 * j // 64 * 64
+                    else:
+                        w = 8 * i // 64 * 64
+                        h = 8 * j // 64 * 64
+        return w, h
 
 class EmptyLatentRatioSelector:
     ratio_sizes = ['1:1','5:4','4:3','3:2','16:9','21:9','4:5','3:4','2:3','9:16','9:21','5:7','7:5']
@@ -57,25 +79,34 @@ class EmptyLatentRatioCustom:
 
     def generate(self, width, height, batch_size=1):
         # solver
-        w = 0
-        h = 0
-        for i in range(1, 256):
-            for j in range(1, 256):
-                if Fraction(8 * i, 8 * j) > Fraction(width, height) * 0.98 and Fraction(8 * i, 8 * j) < Fraction(width, height) and 8 * i * 8 * j <= 1024 * 1024:
-                    if (ceil(8 * i / 64) * 64) * (ceil(8 * j / 64) * 64) <= 1024 * 1024:
-                        w = ceil(8 * i / 64) * 64
-                        h = ceil(8 * j / 64) * 64
-                    elif (8 * i // 64 * 64) * (ceil(8 * j / 64) * 64) <= 1024 * 1024:
-                        w = 8 * i // 64 * 64
-                        h = ceil(8 * j / 64) * 64
-                    elif (ceil(8 * i / 64) * 64) * (8 * j // 64 * 64) <= 1024 * 1024:
-                        w = ceil(8 * i / 64) * 64
-                        h = 8 * j // 64 * 64
-                    else:
-                        w = 8 * i // 64 * 64
-                        h = 8 * j // 64 * 64
+        w, h = sdxl_size(width, height)
         latent = torch.zeros([batch_size, 4, h // 8, w // 8])
         return ({"samples":latent}, )
+
+class ResizeImageSDXL:
+    crop_methods = ["disabled", "center"]
+    upscale_methods = ["nearest-exact", "bilinear", "area", "bicubic"]
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": { "image": ("IMAGE",), "upscale_method": (s.upscale_methods,),
+                              "crop": (s.crop_methods,)}}
+    
+    RETURN_TYPES = ('IMAGE',)
+    FUNCTION = 'resize'
+    CATEGORY = 'sdxl'
+
+    def upscale(self, image, upscale_method, width, height, crop):
+        samples = image.movedim(-1,1)
+        s = comfy.utils.common_upscale(samples, width, height, upscale_method, crop)
+        s = s.movedim(1,-1)
+        return (s,)
+
+    def resize(self, image, upscale_method, crop):
+        w, h = sdxl_size(image.shape[2], image.shape[1])
+        print('Resizing image from {}x{} to {}x{}'.format(image.shape[2], image.shape[1], w, h))
+        img = self.upscale(image, upscale_method, w, h, crop)[0]
+        return (img, )
 
 class SaveImagesMikey:
     def __init__(self):
@@ -150,5 +181,6 @@ NODE_CLASS_MAPPINGS = {
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
     'Empty Latent Ratio Custom SDXL': EmptyLatentRatioCustom,
     'Save Image With Prompt Data': SaveImagesMikey,
+    'Resize Image for SDXL': ResizeImageSDXL,
     'VAE Decode 6GB SDXL (deprecated)': VAEDecode6GB,
 }
