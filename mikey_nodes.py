@@ -1,9 +1,17 @@
+import datetime
 from fractions import Fraction
+import json
 from math import ceil
+import os
+import re
 
+import numpy as np
+from PIL import Image
+from PIL.PngImagePlugin import PngInfo
 import torch
 
 from comfy.model_management import unload_model, soft_empty_cache
+import folder_paths
 
 class EmptyLatentRatioSelector:
     ratio_sizes = ['1:1','5:4','4:3','3:2','16:9','21:9','4:5','3:4','2:3','9:16','9:21','5:7','7:5']
@@ -69,6 +77,60 @@ class EmptyLatentRatioCustom:
         latent = torch.zeros([batch_size, 4, h // 8, w // 8])
         return ({"samples":latent}, )
 
+class SaveImagesMikey:
+    def __init__(self):
+        self.output_dir = folder_paths.get_output_directory()
+        self.type = "output"
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": 
+                    {"images": ("IMAGE", ),
+                     "positive_prompt": ("STRING", {'default': 'Positive Prompt'}),
+                     "negative_prompt": ("STRING", {'default': 'Negative Prompt'}),},
+                     "filename_prefix": ("STRING", {"default": ""}),
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                }
+
+    RETURN_TYPES = ()
+    FUNCTION = "save_images"
+
+    OUTPUT_NODE = True
+
+    CATEGORY = "sdxl"
+
+    def save_images(self, images, filename_prefix='', prompt=None, extra_pnginfo=None, positive_prompt='', negative_prompt=''):
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, self.output_dir, images[0].shape[1], images[0].shape[0])
+        results = list()
+        for image in images:
+            i = 255. * image.cpu().numpy()
+            img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
+            metadata = PngInfo()
+            pos_trunc = ''
+            if prompt is not None:
+                metadata.add_text("prompt", json.dumps(prompt))
+            if extra_pnginfo is not None:
+                for x in extra_pnginfo:
+                    metadata.add_text(x, json.dumps(extra_pnginfo[x]))
+            if positive_prompt:
+                metadata.add_text("positive_prompt", json.dumps(positive_prompt))
+                # replace any special characters with nothing and spaces with _
+                clean_pos = re.sub(r'[^a-zA-Z0-9 ]', '', positive_prompt)
+                pos_trunc = clean_pos.replace(' ', '_')[0:40]
+            if negative_prompt:
+                metadata.add_text("negative_prompt", json.dumps(negative_prompt))
+            ts_str = datetime.datetime.now().strftime("%y%m%d%H%M%S")
+            file = f"{ts_str}_{pos_trunc}_{filename}_{counter:05}_.png"
+            img.save(os.path.join(full_output_folder, file), pnginfo=metadata, compress_level=4)
+            results.append({
+                "filename": file,
+                "subfolder": subfolder,
+                "type": self.type
+            })
+            counter += 1
+
+        return { "ui": { "images": results } }
+
 class VAEDecode6GB:
     """ deprecated. update comfy to fix issue. """
     @classmethod
@@ -87,5 +149,6 @@ class VAEDecode6GB:
 NODE_CLASS_MAPPINGS = {
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
     'Empty Latent Ratio Custom SDXL': EmptyLatentRatioCustom,
+    'Save Image With Prompt Data': SaveImagesMikey,
     'VAE Decode 6GB SDXL (deprecated)': VAEDecode6GB,
 }
