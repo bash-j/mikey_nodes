@@ -1,0 +1,168 @@
+{
+    "styles": {
+        "none": {
+        "positive": "",
+        "negative": ""
+        },
+        "photographic": {
+        "positive": "digital photograph, high resolution, depth of field, bokeh, rule of thirds, golden hour, fujifilm, subject centered",
+        "negative": "watermark, stock photo, over the top bokeh, analog film, sketch, polaroid, low-resolution, 3d render, digital art, photoshopped, cartoon, anime, trypophobia, miniature"
+        },
+        "analog-film": {
+        "positive": "kodachrome analog film, film grain, vignetting, contrast, color balance, light leaks, faded colors",
+        "negative": "watermark, stock photo, Digital photography, high resolution, lack of grain and light leaks, crisp, sharp images, photoshopped, trypophobia, miniature"
+        },
+        "cinematic": {
+        "positive": "dramatic cinematic scene, wide angle, filmed with an anomorphic lens on 30mm film, depth of field, high contrast, color grading, wide aspect ratio, soft focus, hollywood film",
+        "negative": "watermark, stock photo, portrait photography, sepia, blurry, low resolution, instagram filter, narrow field of view, lack of film grain, sharp focus, trypophobia, miniature"
+        },
+        "documentary": {
+        "positive": "documentary photography, candid, unposed, natural lighting, photojournalism, raw, real, authentic",
+        "negative": "watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniature"
+        },
+        "nature-photography": {
+        "positive": "nature photography, landscape, wildlife, macro, nature, national geographic, outdoors",
+        "negative": "logo, watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniature"
+        },
+        "editorial": {
+        "positive": "editorial photography, glamour, studio lighting, portrait photography, staged, pose",
+        "negative": "watermark, deep-fried, harsh lighting, stock photo, 3d render, cartoon, anime, artificial, unnatural, photoshopped, trypophobia"
+        },
+        "polaroid": {
+        "positive": "polaroid photograph, white border, square format, soft focus, vignette, instant film texture, date stamp",
+        "negative": "watermark, stock photo, digital photography, hdr, full color range, hard focus, trypophobia, miniature, photoshopped"
+        },
+        "3d-model": {
+        "positive": "3d model, unreal engine, textures, volumetric lighting, raytraced rendering, subject centered",
+        "negative": "watermark, 2D, cartoon, trypophobia, miniature"
+        },
+        "low-poly": {
+        "positive": "3d model, low poly, minimal polygons, sharp edges, flat colors, geometric abstraction, subject centered",
+        "negative": "watermark, Highly detailed or realistic models, smooth gradients, round shapes, trypophobia, miniature"
+        },
+        "modeling-compound": {
+        "positive": "clay, plasticine, play-doh, putty, polymer clay, air-dry clay",
+        "negative": "watermark, Hard, hand, rigid surfaces, high detail, thin and fine elements, trypophobia"
+        },
+        "diorama": {
+        "positive": "photograph of a handcrafted diorama scene, layered elements, perspective, scale models, cut-outs, forced perspective, painted background",
+        "negative": "watermark, 3d model, digital art, cartoon, full-scale representation, trypophobia"
+        },
+        "miniatures": {
+        "positive": "miniature, scale models, detailed painting, tiny elements, forced perspective, sculpted textures, diorama setting",
+        "negative": "watermark, full-scale, simplified, flat colors, trypophobia"
+        },
+        "abstract": {
+        "positive": "abstract art piece, non-representational, geometric shapes, freeform shapes, bold colors, dynamic composition",
+        "negative": "watermark, Realistic, detailed, representational style, subtle color schemes"
+        },
+        "anime": {
+        "positive": "anime style, 2d, bright colors, black outlines, large eyes, expressive, by artists such as Akira Toriyama, Masashi Kishimoto and Studio Ghibli",
+        "negative": "watermark, comic book, digital art, messy, scribbles, muted tones, complex environments with too much detail"
+        },
+        "comic-book": {
+        "positive": "comic book art, onomatopoeic graphics, halftone dots, color separation, bold lines, reminiscent of art from Marvel, DC, Dark Horse, Image, and other comic book publishers",
+        "negative": "watermark, Photorealism, subtle colors, lack of text and graphics"
+        },
+        "digital-art": {
+        "positive": "digital art, layers, blending modes, gradients, color palettes, vector shapes, cg society, made in corel painter",
+        "negative": "watermark, Analog mediums, traditional sketching and painting techniques"
+        },
+        "fantasy-art": {
+        "positive": "fantasy art, imaginative themes, surreal elements, mythological creatures, dreamlike scenery",
+        "negative": "watermark, modern or historical settings, neon colors"
+        },
+        "dark-fantasy": {
+        "positive": "dark fantasy art, gothic themes, macabre, horror, dark, gloomy, sinister, ominous, eerie",
+        "negative": "watermark, bright colors, cheerful, happy, cute, cartoon, anime, digital art, 3d render, photograph, 2d art"
+        },
+        "oil-painting": {
+        "positive": "oil painting, thick, textured brush strokes, impasto, glazing, visible canvas texture, blending, rich colors",
+        "negative": "watermark, Smooth, flat surfaces, quick drying, transparent colors"
+        },
+        "watercolor": {
+        "positive": "watercolor art, transparent layers, washes, wet-on-wet, wet-on-dry, blooms, gradients, soft edges",
+        "negative": "watermark, digital art, 3d render, vinyl art, oil painting, sketch, opaque, thick layers, hard edges, artist tools, paintbrushes, studio"
+        },
+        "charcoal": {
+        "positive": "charcoal drawing, rich blacks, contrasting whites, smudging, erasure, hatching, cross-hatching, tonal values, rough texture",
+        "negative": "watermark, Colorful imagery, smooth textures, precise details"
+        },
+        "color-pencil": {
+        "positive": "color pencil drawing, hatching, cross-hatching, layering, burnishing, visible pencil strokes, bright colors, blended shading",
+        "negative": "watermark, flat colors, lack of texture, smooth gradients, cartoon, digital art, photograph, digital art"
+        },
+        "crayon": {
+        "positive": "crayon drawing, Waxy texture, bright colors, visible stroke marks, uneven coverage, layered colors, scribbling, rubbed textures",
+        "negative": "watermark, Smooth, flat coverage, high detail, precision, photograph, expert artist, digital art, 3d render"
+        },
+        "cross-stitch": {
+        "positive": "handmade cross-stitch scene, embroidery floss, X-shaped stitches, textile",
+        "negative": "watermark, 3d render, photograph, cartoon, digital art"
+        },
+        "felt": {
+        "positive": "handmade felt scene, colorful, soft felt fabric, intricate stitching, glass beads, cotton wool",
+        "negative": "watermark, Hard, rigid textures, smooth surfaces"
+        },
+        "origami": {
+        "positive": "photo of an origami art, made of paper, geometric shapes, solid plain background, simple, centered subject",
+        "negative": "watermark, hands, sculpture, 3d model, cartoon, 2d art, digital art, made with photoshop, fabric"
+        },
+        "scrapbook": {
+        "positive": "scrapbook page, mixed media, collage, cut-outs, layered paper, textured patterns, stickers, ephemera",
+        "negative": "watermark, Digital design, single layer compositions"
+        },
+        "isometric": {
+        "positive": "isometric, 2.5D projection, orthogonal projection, equidistant angles, flat perspective",
+        "negative": "watermark, Perspective drawing, non-geometric shapes, organic forms, varying angles, 3d models, photograph"
+        },
+        "line-art": {
+        "positive": "line art, contour drawing, cross-hatching, stippling, negative space, silhouette, minimalist design",
+        "negative": "watermark, Full color, shading, realistic detail"
+        },
+        "neon-punk": {
+        "positive": "neon punk, vibrant neon colors, retro-futurism, cybernetic themes, grungy textures, glowing effects",
+        "negative": "watermark, Natural colors, historical, vintage, clean, crisp textures, dull"
+        },
+        "pixel-art": {
+        "positive": "*~aesthetic~*~ #pixelart, Pixel art, 3d pixel art, incredible pixel art details, 8-bit graphics, sharp details, early computer game art, similar in style to terraria, stardew valley",
+        "negative": "watermark, cross-stitch, 3d render, cartoon, high-resolution images, photo-realistic"
+        },
+        "tile-texture": {
+        "positive": "digital textures, knolling, repetitive, symmetrical, consistent, tessellation, seamless edges",
+        "negative": "watermark, 3d render, photograph, organic, irregular, tiny faces, fabric, ceramic"
+        },
+        "lithography": {
+        "positive": "lithograph, risograph, planographic printing, flat colors, smooth gradients, bold lines",
+        "negative": "watermark, highly detailed, photographic, 3d model"
+        },
+        "mosaic": {
+        "positive": "mosaic art, tile fragments, geometric patterns, grout, tessellation, abstract imagery",
+        "negative": "watermark, Continuous, smooth surfaces, realistic imagery, organic forms"
+        },
+        "woodblock-print": {
+        "positive": "Woodblock print, relief printing, visible wood grain, bold lines, etched details, flat areas of color, handmade impressions, simple forms",
+        "negative": "watermark, Intaglio printmaking, lithograph, vinyl print, highly detailed"
+        },
+        "sticker": {
+        "positive": "sticker, 2d art style, solid backgound color, bold lines, bright colors, simple shapes, flat colors, minimal shading",
+        "negative": "watermark, 3d model, realistic, highly detailed, complex background, intricate details, paint splatters, gradients, texture, messy, scribble"
+        },
+        "stained-glass": {
+        "positive": "stained glass art piece, colored glass, lead caming, soldered joints",
+        "negative": "watermark, Opaque, solid colors, flat surfaces, smooth plastic, 3d render, cartoon, digital art"
+        },
+        "tattoo": {
+        "positive": "tattoo, ink, skin, body art, tattoo design",
+        "negative": "watermark, 3d render, cartoon, digital art, photograph, 2d art, made with photoshop"
+        },
+        "statue": {
+        "positive": "photograph of a statue figure on display, made of stone, intricate carved and etched details, masterpiece, simple background",
+        "negative": "watermark, 3d model, cartoon, digital art, photograph, 2d art"
+        },
+        "album-art": {
+        "positive": "album art, music album cover, glossy paper, record cover, vinyl cover, impactful imagery, bold colors, simple shapes, typography, scratched texture",
+        "negative": "watermark, 3d render, cartoon, digital art, traditional art"
+        }
+    }
+}

@@ -55,7 +55,7 @@ class EmptyLatentRatioSelector:
     def INPUT_TYPES(s):
         return {'required': {'ratio_selected': (s.ratio_sizes,),
                              "batch_size": ("INT", {"default": 1, "min": 1, "max": 64})}}
-    
+
     RETURN_TYPES = ('LATENT',)
     FUNCTION = 'generate'
     CATEGORY = 'sdxl'
@@ -72,7 +72,7 @@ class EmptyLatentRatioCustom:
         return {"required": { "width": ("INT", {"default": 1024, "min": 1, "max": 8192, "step": 1}),
                               "height": ("INT", {"default": 1024, "min": 1, "max": 8192, "step": 1}),
                               "batch_size": ("INT", {"default": 1, "min": 1, "max": 64})}}
-    
+
     RETURN_TYPES = ('LATENT',)
     FUNCTION = 'generate'
     CATEGORY = 'sdxl'
@@ -96,7 +96,7 @@ class ResizeImageSDXL:
     def INPUT_TYPES(s):
         return {"required": { "image": ("IMAGE",), "upscale_method": (s.upscale_methods,),
                               "crop": (s.crop_methods,)}}
-    
+
     RETURN_TYPES = ('IMAGE',)
     FUNCTION = 'resize'
     CATEGORY = 'sdxl'
@@ -120,7 +120,7 @@ class SaveImagesMikey:
 
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": 
+        return {"required":
                     {"images": ("IMAGE", ),
                      "positive_prompt": ("STRING", {'default': 'Positive Prompt'}),
                      "negative_prompt": ("STRING", {'default': 'Negative Prompt'}),},
@@ -152,7 +152,7 @@ class SaveImagesMikey:
                 metadata.add_text("positive_prompt", json.dumps(positive_prompt))
                 # replace any special characters with nothing and spaces with _
                 clean_pos = re.sub(r'[^a-zA-Z0-9 ]', '', positive_prompt)
-                pos_trunc = clean_pos.replace(' ', '_')[0:40]
+                pos_trunc = clean_pos.replace(' ', '_')[0:80]
             if negative_prompt:
                 metadata.add_text("negative_prompt", json.dumps(negative_prompt))
             ts_str = datetime.datetime.now().strftime("%y%m%d%H%M%S")
@@ -166,6 +166,67 @@ class SaveImagesMikey:
             counter += 1
 
         return { "ui": { "images": results } }
+
+class PromptWithStyle:
+    elrs = EmptyLatentRatioSelector()
+
+    @classmethod
+    def INPUT_TYPES(s):
+        # get path to same folder as this python file
+        p = os.path.dirname(os.path.realpath(__file__))
+        file_path = os.path.join(p, 'styles.json')
+        with open(file_path, 'r') as file:
+            data = json.load(file)
+        # each style has a positive and negative key
+        """ start of json styles.json looks like this:
+        {
+        "styles": {
+            "none": {
+            "positive": "",
+            "negative": ""
+            },
+            "3d-model": {
+            "positive": "3d model, polygons, mesh, textures, lighting, rendering",
+            "negative": "2D representation, lack of depth and volume, no realistic rendering"
+            },
+        """
+        s.styles = list(data['styles'].keys())
+        s.pos_style = {}
+        s.neg_style = {}
+        for style in s.styles:
+            s.pos_style[style] = data['styles'][style]['positive']
+            s.neg_style[style] = data['styles'][style]['negative']
+        return {"required": {"positive_prompt": ("STRING", {"multiline": True, 'default': 'Positive Prompt'}),
+                             "negative_prompt": ("STRING", {"multiline": True, 'default': 'Negative Prompt'}),
+                             "style": (s.styles,),
+                             "ratio_selected": (s.elrs.ratio_sizes,),
+                             "batch_size": ("INT", {"default": 1, "min": 1, "max": 64}),
+                             }
+        }
+
+    RETURN_TYPES = ('LATENT','STRING','STRING','STRING','STRING','INT','INT','INT','INT',)
+    RETURN_NAMES = ('samples','positive_prompt','negative_prompt','positive_style',
+                    'negative_style','width','height','refiner_width','refiner_height',)
+    FUNCTION = 'start'
+    CATEGORY = 'sdxl'
+
+    def start(self, positive_prompt, negative_prompt, style, ratio_selected, batch_size):
+        pos_prompt = positive_prompt + ', ' + self.pos_style[style]
+        neg_prompt = negative_prompt + ', ' + self.neg_style[style]
+        width = self.elrs.ratio_dict[ratio_selected][0]
+        height = self.elrs.ratio_dict[ratio_selected][1]
+        latent = torch.zeros([batch_size, 4, height // 8, width // 8])
+        refiner_width = width * 8
+        refiner_height = height * 8
+        return ({"samples":latent},
+                str(pos_prompt),
+                str(neg_prompt),
+                str(self.pos_style[style]),
+                str(self.neg_style[style]),
+                width,
+                height,
+                refiner_width,
+                refiner_height,)
 
 class VAEDecode6GB:
     """ deprecated. update comfy to fix issue. """
@@ -187,6 +248,7 @@ NODE_CLASS_MAPPINGS = {
     'Empty Latent Ratio Custom SDXL': EmptyLatentRatioCustom,
     'Save Image With Prompt Data': SaveImagesMikey,
     'Resize Image for SDXL': ResizeImageSDXL,
+    'Prompt With Style': PromptWithStyle,
     'VAE Decode 6GB SDXL (deprecated)': VAEDecode6GB,
 }
 ## TODO
