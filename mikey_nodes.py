@@ -79,7 +79,12 @@ class EmptyLatentRatioCustom:
 
     def generate(self, width, height, batch_size=1):
         # solver
-        w, h = sdxl_size(width, height)
+        if width == 1 and height == 1:
+            w, h = 1024, 1024
+        if f'{width}:{height}' in EmptyLatentRatioSelector.ratio_dict:
+            w, h = EmptyLatentRatioSelector.ratio_dict[f'{width}:{height}']
+        else:
+            w, h = sdxl_size(width, height)
         latent = torch.zeros([batch_size, 4, h // 8, w // 8])
         return ({"samples":latent}, )
 
@@ -184,3 +189,6 @@ NODE_CLASS_MAPPINGS = {
     'Resize Image for SDXL': ResizeImageSDXL,
     'VAE Decode 6GB SDXL (deprecated)': VAEDecode6GB,
 }
+## TODO
+# Resize Image and return the new width and height
+# SDXL Ultimate Upscaler?
