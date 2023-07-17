@@ -207,6 +207,10 @@
         "glam": {
         "positive": "analog photograph, centered with backdrop background, surreal fantasy, soft focus, kitsch aesthetic, intricate set designs, posing with props, theatrical lighting, dreamlike visuals, pastel lighting Gels, watercolor art in the background",
         "negative": "clutter, watermark, stock photo, bokeh, 3d render, cartoon, anime, realistic representation, muted colors, sharp focus, minimalist aesthetic, everyday themes, simple sets, natural lighting, concrete visuals"
+        },
+        "mecha": {
+        "positive": "subject wearing a futuristic armor, cybernetic implants, glossy surfaces, glass and metal, lens flares, volumetric lighting, high dynamic range, cinematic, dramatic lighting, futuristic, sci-fi, holographic projection, epic cgi effects, big-budget, high-concept action films characterized by fast cutting, stylistic cinematography and visuals, and extensive use of special effects, including frequent depictions of explosions, dark background, wet ground, reflections",
+        "negative": "fully robotic, face mask, face covered, watermark, stock photo, portrait photography, sepia, blurry, low resolution, instagram filter, narrow field of view, lack of film grain, sharp focus, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice"
         }
     }
 }
