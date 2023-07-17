@@ -57,7 +57,7 @@
         "negative": "watermark, Realistic, detailed, representational style, subtle color schemes"
         },
         "anime": {
-        "positive": "anime style, 2d, bright colors, black outlines, large eyes, expressive, by artists such as Akira Toriyama, Masashi Kishimoto and Studio Ghibli",
+        "positive": "anime style, 2d, bright colors, black outlines, [by artists such as Akira Toriyama and Studio Ghibli]",
         "negative": "watermark, comic book, digital art, messy, scribbles, muted tones, complex environments with too much detail"
         },
         "comic-book": {
@@ -119,6 +119,10 @@
         "line-art": {
         "positive": "line art, contour drawing, cross-hatching, stippling, negative space, silhouette, minimalist design",
         "negative": "watermark, Full color, shading, realistic detail"
+        },
+        "vector-art": {
+        "positive": "vector art, crisp lines, flat colors, use of gradients, precise detailing, made with adobe illustrator",
+        "negative": "watermark, signature, raster art, blurred lines, detailed textures, realistic shading and coloring, pixel-based, organic details"
         },
         "neon-punk": {
         "positive": "neon punk, vibrant neon colors, retro-futurism, cybernetic themes, grungy textures, glowing effects",
