@@ -191,6 +191,14 @@
         "lark": {
         "positive": "raw photography, photograph filter, natural lighting, photojournalism, raw, real, authentic, desaturated reds, increases contrast and exposure, cooler temperature, bright colors",
         "negative": "watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniaturee, halftone dots, smooth, blurred, porous surface, pumice"
+        },
+        "nonagon": {
+        "positive": "professional photograph edited and mixed with traditional methods, nonagon infinity, geometric patterns, repeating cycles, surreal landscape, 2020s top trending photos, conceptual photo art piece",
+        "negative": "trypophobia, low resolution, crushed cans, blurry, mangled hands"
+        },
+        "kaleidoscope": {
+        "positive": "photograph by artist Ansel Adams, Mirrored, kaleidoscope-like patterns, Colorful, paint splatter accents, beautiful environment",
+        "negative": "poor lighting, unflattering composition, awkward posing, lack of expression, uninteresting background, flat colors, harsh shadows, over-editing, out of focus, overexposed, underexposed, poor framing, distracting elements, unnatural skin tones, weak concept, unengaging subject, lack of depth, excessive noise, inconsistent style, unbalanced contrast"
         }
     }
 }
