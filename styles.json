@@ -81,7 +81,7 @@
         "negative": "watermark, Smooth, flat surfaces, quick drying, transparent colors"
         },
         "watercolor": {
-        "positive": "watercolor art, transparent layers, washes, wet-on-wet, wet-on-dry, blooms, gradients, soft edges",
+        "positive": "watercolor art, transparent layers, washes, wet-on-wet, wet-on-dry, gradients, soft edges",
         "negative": "watermark, digital art, 3d render, vinyl art, oil painting, sketch, opaque, thick layers, hard edges, artist tools, paintbrushes, studio"
         },
         "charcoal": {
