@@ -163,6 +163,10 @@
         "album-art": {
         "positive": "album art, music album cover, glossy paper, record cover, vinyl cover, impactful imagery, bold colors, simple shapes, typography, scratched texture",
         "negative": "watermark, 3d render, cartoon, digital art, traditional art"
-        }
+        },
+        "wes-anderson": {
+        "positive": "Wes Anderson film style, symmetrical composition, pastel color palette, vintage aesthetics, quirky, flat space camera moves, tableau staging, stationary, costume, carefully posed, with props and/or scenery, theatrically lit",
+        "negative": "watermark, digital art, 3d render, cartoon, asymmetrical, dark colors, dull, modern, minimalist aesthetics, conventional, motion blur, computer-generated fonts"
+    }
     }
 }
