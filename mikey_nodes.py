@@ -201,6 +201,7 @@ class PromptWithStyle:
                              "style": (s.styles,),
                              "ratio_selected": (s.elrs.ratio_sizes,),
                              "batch_size": ("INT", {"default": 1, "min": 1, "max": 64}),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
                              }
         }
 
@@ -210,7 +211,51 @@ class PromptWithStyle:
     FUNCTION = 'start'
     CATEGORY = 'sdxl'
 
-    def start(self, positive_prompt, negative_prompt, style, ratio_selected, batch_size):
+    def start(self, positive_prompt, negative_prompt, style, ratio_selected, batch_size, seed):
+        # wildcards always have a __ prefix and __ suffix
+        # regex to find all wildcards
+        # path to wildcard folder with matching wildcard.txt files is the root_project_dir/wildcards
+        wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
+        wildcard_regex = r'__.*?__'
+        pos_wildcard = ''
+        pos_seed = seed
+        for match in re.findall(wildcard_regex, positive_prompt):
+            # check for matching file in wildcard folder
+            if pos_wildcard == match:
+                pos_seed += 1
+            else:
+                pos_seed = seed
+            is_file = os.path.isfile(os.path.join(wildcard_path, match[2:-2] + '.txt'))
+            if is_file:
+                with open(os.path.join(wildcard_path, match[2:-2] + '.txt'), 'r') as file:
+                    wildcard_lines = file.readlines()
+                    # offset can be larger than the number of lines in the file, or it could even be a negative number
+                    # starting with line 0, so we need to use modulo to wrap around
+                    line_number = (pos_seed % len(wildcard_lines))
+                    # only replace the first match so that duplicates can be read from the next line
+                    positive_prompt = positive_prompt.replace(match, wildcard_lines[line_number].strip(), 1)
+                    pos_wildcard = match
+            else:
+                print(f'Wildcard file {match[2:-2]}.txt not found in {wildcard_path}')
+        neg_wildcard = ''
+        neg_seed = seed
+        for match in re.findall(wildcard_regex, negative_prompt):
+            # check for matching file in wildcard folder
+            if neg_wildcard == match:
+                neg_seed += 1
+            else:
+                neg_seed = seed
+            is_file = os.path.isfile(os.path.join(wildcard_path, match[2:-2] + '.txt'))
+            if is_file:
+                with open(os.path.join(wildcard_path, match[2:-2] + '.txt'), 'r') as file:
+                    wildcard_lines = file.readlines()
+                    # offset can be larger than the number of lines in the file, or it could even be a negative number
+                    # starting with line 0, so we need to use modulo to wrap around
+                    line_number = (neg_seed % len(wildcard_lines))
+                    negative_prompt = negative_prompt.replace(match, wildcard_lines[line_number].strip(), 1)
+                    neg_wildcard = match
+            else:
+                print(f'Wildcard file {match[2:-2]}.txt not found in {wildcard_path}')
         pos_prompt = positive_prompt + ', ' + self.pos_style[style]
         neg_prompt = negative_prompt + ', ' + self.neg_style[style]
         width = self.elrs.ratio_dict[ratio_selected][0]
