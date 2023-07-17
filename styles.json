@@ -6,51 +6,51 @@
         },
         "photographic": {
         "positive": "digital photograph, high resolution, depth of field, bokeh, rule of thirds, golden hour, fujifilm, subject centered",
-        "negative": "watermark, stock photo, over the top bokeh, analog film, sketch, polaroid, low-resolution, 3d render, digital art, photoshopped, cartoon, anime, trypophobia, miniature, halftone dots"
+        "negative": "watermark, stock photo, over the top bokeh, analog film, sketch, polaroid, low-resolution, 3d render, digital art, photoshopped, cartoon, anime, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice"
         },
         "analog-film": {
         "positive": "kodachrome analog film, film grain, vignetting, contrast, color balance, light leaks, faded colors",
-        "negative": "watermark, stock photo, Digital photography, high resolution, lack of grain and light leaks, crisp, sharp images, photoshopped, trypophobia, miniature, halftone dots"
+        "negative": "watermark, stock photo, Digital photography, high resolution, lack of grain and light leaks, crisp, sharp images, photoshopped, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice"
         },
         "cinematic": {
         "positive": "dramatic cinematic scene, wide angle, filmed with an anomorphic lens on 30mm film, depth of field, high contrast, color grading, wide aspect ratio, soft focus, hollywood film",
-        "negative": "watermark, stock photo, portrait photography, sepia, blurry, low resolution, instagram filter, narrow field of view, lack of film grain, sharp focus, trypophobia, miniature, halftone dots"
+        "negative": "watermark, stock photo, portrait photography, sepia, blurry, low resolution, instagram filter, narrow field of view, lack of film grain, sharp focus, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice"
         },
         "documentary": {
         "positive": "documentary photography, candid, unposed, natural lighting, photojournalism, raw, real, authentic",
-        "negative": "watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniature, halftone dots"
+        "negative": "watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice"
         },
         "nature-photography": {
         "positive": "nature photography, landscape, wildlife, macro, nature, national geographic, outdoors",
-        "negative": "logo, watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniature, halftone dots"
+        "negative": "logo, watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice"
         },
         "editorial": {
         "positive": "editorial photography, glamour, studio lighting, portrait photography, staged, pose",
-        "negative": "watermark, deep-fried, harsh lighting, stock photo, 3d render, cartoon, anime, artificial, unnatural, photoshopped, trypophobia"
+        "negative": " watermark, deep-fried, harsh lighting, stock photo, 3d render, cartoon, anime, artificial, unnatural, photoshopped, trypophobia, smooth, blurred, porous surface, pumice"
         },
         "polaroid": {
         "positive": "polaroid photograph, white border, square format, soft focus, vignette, instant film texture, date stamp",
-        "negative": "watermark, stock photo, digital photography, hdr, full color range, hard focus, trypophobia, miniature, photoshopped, halftone dots"
+        "negative": "watermark, stock photo, digital photography, hdr, full color range, hard focus, trypophobia, miniature, photoshopped, halftone dots, smooth, blurred, porous surface, pumice"
         },
         "3d-model": {
         "positive": "3d model, unreal engine, textures, volumetric lighting, raytraced rendering, subject centered",
-        "negative": "watermark, 2D, cartoon, trypophobia, miniature"
+        "negative": "watermark, 2D, cartoon, trypophobia, miniature, porous surface, pumice"
         },
         "low-poly": {
         "positive": "3d model, low poly, minimal polygons, sharp edges, flat colors, geometric abstraction, subject centered",
-        "negative": "watermark, Highly detailed or realistic models, smooth gradients, round shapes, trypophobia, miniature"
+        "negative": "watermark, Highly detailed or realistic models, smooth gradients, round shapes, trypophobia, miniature, porous surface, pumice"
         },
         "modeling-compound": {
         "positive": "clay, plasticine, play-doh, putty, polymer clay, air-dry clay",
-        "negative": "watermark, Hard, hand, rigid surfaces, high detail, thin and fine elements, trypophobia"
+        "negative": "watermark, Hard, hand, rigid surfaces, high detail, thin and fine elements, trypophobia, porous surface, pumice"
         },
         "diorama": {
         "positive": "photograph of a handcrafted diorama scene, layered elements, perspective, scale models, cut-outs, forced perspective, painted background",
-        "negative": "watermark, 3d model, digital art, cartoon, full-scale representation, trypophobia, halftone dots"
+        "negative": "watermark, 3d model, digital art, cartoon, full-scale representation, trypophobia, halftone dots, smooth, blurred, porous surface, pumice"
         },
         "miniatures": {
         "positive": "miniature, scale models, detailed painting, tiny elements, forced perspective, sculpted textures, diorama setting",
-        "negative": "watermark, full-scale, simplified, flat colors, trypophobia, halftone dots"
+        "negative": "watermark, full-scale, simplified, flat colors, trypophobia, halftone dots, smooth, blurred, porous surface, pumice"
         },
         "abstract": {
         "positive": "abstract art piece, non-representational, geometric shapes, freeform shapes, bold colors, dynamic composition",
@@ -66,15 +66,15 @@
         },
         "digital-art": {
         "positive": "digital art, layers, blending modes, gradients, color palettes, vector shapes, cg society, made in corel painter",
-        "negative": "watermark, Analog mediums, traditional sketching and painting techniques"
+        "negative": "watermark, Analog mediums, traditional sketching and painting techniques, pumice"
         },
         "fantasy-art": {
         "positive": "fantasy art, imaginative themes, surreal elements, mythological creatures, dreamlike scenery",
-        "negative": "watermark, modern or historical settings, neon colors"
+        "negative": "watermark, modern or historical settings, neon colors, pumice"
         },
         "dark-fantasy": {
         "positive": "dark fantasy art, gothic themes, macabre, horror, dark, gloomy, sinister, ominous, eerie",
-        "negative": "watermark, bright colors, cheerful, happy, cute, cartoon, anime, digital art, 3d render, photograph, 2d art"
+        "negative": "watermark, bright colors, cheerful, happy, cute, cartoon, anime, digital art, 3d render, photograph, 2d art, pumice"
         },
         "oil-painting": {
         "positive": "oil painting, thick, textured brush strokes, impasto, glazing, visible canvas texture, blending, rich colors",
@@ -102,7 +102,7 @@
         },
         "felt": {
         "positive": "handmade felt scene, colorful, soft felt fabric, intricate stitching, glass beads, cotton wool",
-        "negative": "watermark, Hard, rigid textures, smooth surfaces"
+        "negative": "watermark, Hard, rigid textures, smooth surfaces, porous surface, smooth, blurred, pumice"
         },
         "origami": {
         "positive": "photo of an origami art, made of paper, geometric shapes, solid plain background, simple, centered subject",
@@ -158,15 +158,15 @@
         },
         "statue": {
         "positive": "photograph of a statue figure on display, made of stone, intricate carved and etched details, masterpiece, simple background",
-        "negative": "watermark, 3d model, cartoon, digital art, photograph, 2d art"
+        "negative": "watermark, 3d model, cartoon, digital art, photograph, 2d art, smooth, blurred, pumice"
         },
         "album-art": {
         "positive": "album art, music album cover, glossy paper, record cover, vinyl cover, impactful imagery, bold colors, simple shapes, typography, scratched texture",
-        "negative": "watermark, 3d render, cartoon, digital art, traditional art"
+        "negative": "watermark, 3d render, cartoon, digital art, traditional art, pumice"
         },
         "wes-anderson": {
         "positive": "Wes Anderson film style, analog photograph, pastel color palette, vintage aesthetics, quirky, tableau staging",
-        "negative": "collage scrapbook, watermark, digital art, 3d render, cartoon, asymmetrical, dark colors, dull, modern, minimalist aesthetics, conventional, motion blur, computer-generated fonts"
+        "negative": "collage scrapbook, watermark, digital art, 3d render, cartoon, asymmetrical, dark colors, dull, modern, minimalist aesthetics, conventional, motion blur, computer-generated fonts, porous surface, pumice"
         },
         "vaporwave": {
         "positive": "vaporwave, 80s, 90s, retro, nostalgic, glitch art, composite image, glitches, scanlines, 30mm analog film, sunset gradient color pallette, miami art aesthetic culture, simple, flat, minimal shading, surreal, dreamlike",
@@ -174,19 +174,19 @@
         },
         "clarendon": {
         "positive": "raw photography, photograph filter, natural lighting, photojournalism, raw, real, authentic, more contrast, deeper shadows, warmer temperature, ever so slight cyan and magenta tones",
-        "negative": "watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniature, halftone dots"
+        "negative": "watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice"
         },
         "gingham": {
         "positive": "raw photography, photograph filter, natural lighting, photojournalism, raw, real, authentic, vintage, faded, washed-out, yellowish tint, warmer temperature, slight vignetting",
-        "negative": "watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniature, halftone dots"
+        "negative": "watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice"
         },
         "juno": {
         "positive": "raw photography, photograph filter, natural lighting, photojournalism, raw, real, authentic, contrast, cooler blues, warm reds and yellows, saturation, bright whites",
-        "negative": "watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniature, halftone dots"
+        "negative": "watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice"
         },
         "lark": {
         "positive": "raw photography, photograph filter, natural lighting, photojournalism, raw, real, authentic, desaturated reds, increases contrast and exposure, cooler temperature, bright colors",
-        "negative": "watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniaturee, halftone dots"
+        "negative": "watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniaturee, halftone dots, smooth, blurred, porous surface, pumice"
         }
     }
 }
