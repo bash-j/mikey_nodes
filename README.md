@@ -6,6 +6,8 @@ This repository contains custom nodes for ComfyUI.
 
 This node allows you to prompt with a style. You can also select the aspect ratio.
 
+Wildcards are supported using the `__word__` syntax. Folder location is comfyui/wildcards
+
 There are outputs for image size and prompts for the clip conditioners.
 
 Example workflow in the prompt_with_styles.json file.
