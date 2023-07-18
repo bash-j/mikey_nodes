@@ -9,8 +9,8 @@
         "negative": "watermark, stock photo, over the top bokeh, analog film, sketch, polaroid, low-resolution, 3d render, digital art, photoshopped, cartoon, anime, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice, steel wool, rubber mask, wax figure"
         },
         "deep-field": {
-        "positive": "high resolution photograph, Hyperfocal distance, everything in focus, sharp details from foreground to background, maximum depth of field, landscape, wide-angle lens, infinity focus, small aperture, large f-stop number, panoramic view, cctv, shot on an iphone",
-        "negative": "cartoon, 3d render, photo frame, collage, white border, digital art, portrait mode, watermark, low resolution, low saturation, amateur, shallow depth of field, bokeh, ((blurred background, blurred foreground)), close-up shot, large aperture, low f-stop number, bokeh, selective focus, macro photography, pumice, steel wool, rubber mask, wax figure"
+        "positive": "high resolution photograph, bringing the distance into focus, landscape panoramic architecture photograph settings, sharp background, wide-angle lens, infinity, small aperture, large f-stop number, panoramic view, shot on an iphone",
+        "negative": "(blurred background, radial blur:1.3), fish-eye lens, depth of field, bokeh, blurred background, blurred foreground, close-up, large aperture, low f-stop number, bokeh, selective focus, macro photography, cartoon, 3d render, photo frame, collage, white border, digital art, portrait mode, watermark, rubber mask, wax figure"
         },
         "analog-film": {
         "positive": "kodachrome analog film, film grain, vignetting, contrast, color balance, light leaks, faded colors",
