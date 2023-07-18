@@ -14,7 +14,7 @@
         },
         "cinematic": {
         "positive": "dramatic cinematic scene, wide angle, filmed with an anomorphic lens on 30mm film, depth of field, high contrast, color grading, wide aspect ratio, soft focus, hollywood film",
-        "negative": "watermark, stock photo, portrait photography, sepia, blurry, low resolution, instagram filter, narrow field of view, lack of film grain, sharp focus, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice"
+        "negative": "watermark, stock photo, portrait photography, sepia, blurry, low resolution, instagram filter, narrow field of view, sharp focus, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice"
         },
         "documentary": {
         "positive": "documentary photography, candid, unposed, natural lighting, photojournalism, raw, real, authentic",
@@ -22,11 +22,11 @@
         },
         "nature-photography": {
         "positive": "nature photography, landscape, wildlife, macro, nature, national geographic, outdoors",
-        "negative": "logo, watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice"
+        "negative": "captions, logo, watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice"
         },
         "editorial": {
-        "positive": "editorial photography, glamour, studio lighting, portrait photography, staged, pose",
-        "negative": " watermark, deep-fried, harsh lighting, stock photo, 3d render, cartoon, anime, artificial, unnatural, photoshopped, trypophobia, smooth, blurred, porous surface, pumice"
+        "positive": "Editorial photography, compelling storytelling photography, high end publication, photo taken with a full-frame DSLR",
+        "negative": "frames, text, logos, articles, newspaper, magazine page, typography, watermark, deep-fried, harsh lighting, stock photo, 3d render, cartoon, anime, artificial, unnatural, photoshopped, trypophobia, smooth, blurred, porous surface, pumice"
         },
         "polaroid": {
         "positive": "polaroid photograph, white border, square format, soft focus, vignette, instant film texture, date stamp",
@@ -57,8 +57,8 @@
         "negative": "watermark, Realistic, detailed, representational style, subtle color schemes"
         },
         "anime": {
-        "positive": "anime style, 2d, bright colors, black outlines, [by artists such as Akira Toriyama and Studio Ghibli]",
-        "negative": "watermark, comic book, digital art, messy, scribbles, muted tones, complex environments with too much detail"
+        "positive": "anime style, 2d, bright colors, black outlines, idia ink, [foreground by Akira Toriyama and and background by Studio Ghibli],",
+        "negative": "watermark, photograph, messy, scribbles, muted tones, overly detailed"
         },
         "comic-book": {
         "positive": "comic book art, onomatopoeic graphics, halftone dots, color separation, bold lines, reminiscent of art from Marvel, DC, Dark Horse, Image, and other comic book publishers",
@@ -211,6 +211,10 @@
         "mecha": {
         "positive": "subject wearing a futuristic armor, cybernetic implants, glossy surfaces, glass and metal, lens flares, volumetric lighting, high dynamic range, cinematic, dramatic lighting, futuristic, sci-fi, holographic projection, epic cgi effects, big-budget, high-concept action films characterized by fast cutting, stylistic cinematography and visuals, and extensive use of special effects, including frequent depictions of explosions, dark background, wet ground, reflections",
         "negative": "fully robotic, face mask, face covered, watermark, stock photo, portrait photography, sepia, blurry, low resolution, instagram filter, narrow field of view, lack of film grain, sharp focus, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice"
+        },
+        "padam": {
+        "positive": "still from a pop music video, red latex with red tulle, wind blown hair and fabric, pop colors, bright whites, dynamic dance poses",
+        "negative": "watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice"
         }
     }
 }
