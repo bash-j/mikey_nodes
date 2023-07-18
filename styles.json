@@ -8,6 +8,10 @@
         "positive": "digital photograph, high resolution, depth of field, bokeh, rule of thirds, golden hour, fujifilm, subject centered",
         "negative": "watermark, stock photo, over the top bokeh, analog film, sketch, polaroid, low-resolution, 3d render, digital art, photoshopped, cartoon, anime, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice"
         },
+        "deep-field": {
+        "positive": "high resolution photograph, Hyperfocal distance, everything in focus, sharp details from foreground to background, maximum depth of field, landscape, wide-angle lens, infinity focus, small aperture, large f-stop number, panoramic view, cctv, shot on an iphone",
+        "negative": "cartoon, 3d render, photo frame, collage, white border, digital art, portrait mode, watermark, low resolution, low saturation, amateur, shallow depth of field, bokeh, ((blurred background, blurred foreground)), close-up shot, large aperture, low f-stop number, bokeh, selective focus, macro photography, pumice, steel wool, rubber mask, wax figure"
+        },
         "analog-film": {
         "positive": "kodachrome analog film, film grain, vignetting, contrast, color balance, light leaks, faded colors",
         "negative": "watermark, stock photo, Digital photography, high resolution, lack of grain and light leaks, crisp, sharp images, photoshopped, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice"
@@ -41,8 +45,8 @@
         "negative": "watermark, Highly detailed or realistic models, smooth gradients, round shapes, trypophobia, miniature, porous surface, pumice"
         },
         "modeling-compound": {
-        "positive": "clay, plasticine, play-doh, putty, polymer clay, air-dry clay",
-        "negative": "watermark, Hard, hand, rigid surfaces, high detail, thin and fine elements, trypophobia, porous surface, pumice"
+        "positive": "whimsical and intricate polymer clay figures expertly hand crafted",
+        "negative": "watermark, Hard, hand, trypophobia, porous surface, pumice, made by children"
         },
         "diorama": {
         "positive": "photograph of a handcrafted diorama scene, layered elements, perspective, scale models, cut-outs, forced perspective, painted background",
