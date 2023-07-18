@@ -256,8 +256,14 @@ class PromptWithStyle:
                     neg_wildcard = match
             else:
                 print(f'Wildcard file {match[2:-2]}.txt not found in {wildcard_path}')
-        pos_prompt = positive_prompt + ', ' + self.pos_style[style]
-        neg_prompt = negative_prompt + ', ' + self.neg_style[style]
+        if positive_prompt == '' or positive_prompt == 'Positive Prompt' or positive_prompt is None:
+            pos_prompt = self.pos_style[style]
+        else:
+            pos_prompt = positive_prompt + ', ' + self.pos_style[style]
+        if negative_prompt == '' or negative_prompt == 'Negative Prompt' or negative_prompt is None:
+            neg_prompt = self.neg_style[style]
+        else:
+            neg_prompt = negative_prompt + ', ' + self.neg_style[style]
         width = self.elrs.ratio_dict[ratio_selected][0]
         height = self.elrs.ratio_dict[ratio_selected][1]
         latent = torch.zeros([batch_size, 4, height // 8, width // 8])
