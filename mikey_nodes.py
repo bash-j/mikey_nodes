@@ -256,6 +256,8 @@ class PromptWithStyle:
                     neg_wildcard = match
             else:
                 print(f'Wildcard file {match[2:-2]}.txt not found in {wildcard_path}')
+        if '{prompt}' in self.pos_style[style]:
+            positive_prompt = self.pos_style[style].replace('{prompt}', positive_prompt)
         if positive_prompt == '' or positive_prompt == 'Positive Prompt' or positive_prompt is None:
             pos_prompt = self.pos_style[style]
         else:
