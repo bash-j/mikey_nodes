@@ -1105,7 +1105,7 @@
           "slot_index": 0
         },
         {
-          "name": "positive_prompt",
+          "name": "positive_prompt_text_g",
           "type": "STRING",
           "links": [
             7,
@@ -1115,7 +1115,7 @@
           "slot_index": 1
         },
         {
-          "name": "negative_prompt",
+          "name": "negative_prompt_text_g",
           "type": "STRING",
           "links": [
             33,
@@ -1125,7 +1125,7 @@
           "slot_index": 2
         },
         {
-          "name": "positive_style",
+          "name": "positive_style_text_l",
           "type": "STRING",
           "links": [
             13,
@@ -1135,7 +1135,7 @@
           "slot_index": 3
         },
         {
-          "name": "negative_style",
+          "name": "negative_style_text_l",
           "type": "STRING",
           "links": [
             31,

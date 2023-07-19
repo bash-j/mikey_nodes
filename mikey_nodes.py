@@ -95,7 +95,8 @@ class ResizeImageSDXL:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": { "image": ("IMAGE",), "upscale_method": (s.upscale_methods,),
-                              "crop": (s.crop_methods,)}}
+                              "crop": (s.crop_methods,)},
+                "optional": { "mask": ("MASK", )}}
 
     RETURN_TYPES = ('IMAGE',)
     FUNCTION = 'resize'
@@ -206,8 +207,8 @@ class PromptWithStyle:
         }
 
     RETURN_TYPES = ('LATENT','STRING','STRING','STRING','STRING','INT','INT','INT','INT',)
-    RETURN_NAMES = ('samples','positive_prompt','negative_prompt','positive_style',
-                    'negative_style','width','height','refiner_width','refiner_height',)
+    RETURN_NAMES = ('samples','positive_prompt_text_g','negative_prompt_text_g','positive_style_text_l',
+                    'negative_style_text_l','width','height','refiner_width','refiner_height',)
     FUNCTION = 'start'
     CATEGORY = 'sdxl'
 
