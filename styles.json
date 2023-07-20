@@ -291,6 +291,58 @@
         "padam": {
         "positive": "still from a pop music video, red latex with red tulle, wind blown hair and fabric, pop colors, bright whites, dynamic dance poses",
         "negative": "watermark, stock photo, 3d render, cartoon, anime, staged, posed, artificial, unnatural, photoshopped, trypophobia, miniature, halftone dots, smooth, blurred, porous surface, pumice"
+        },
+        "collage": {
+        "positive": "Cut and paste, mixed-media, layering, photomontage, ephemera, textured, decoupage",
+        "negative": "Digital art, single medium, smooth textures, 3D modeling"
+        },
+        "paper-mache": {
+        "positive": "Paper pulp, glue, layering, sculpture, painted, crafted, molded shapes",
+        "negative": "Metal, plastic, glass, smooth textures, digital art"
+        },
+        "macrame": {
+        "positive": "Knotting, textile art, cords, fibers, fringes, geometric patterns, wall hanging",
+        "negative": "Sewing, quilting, digital art, smooth textures, glass, metal"
+        },
+        "quilling": {
+        "positive": "Quilling, coiled paper, rolled, shaped, glued, filigree-like, 3D effect",
+        "negative": "Smooth textures, painting, digital art, ceramic, glass"
+        },
+        "pottery": {
+        "positive": "Ceramics, clay, wheel thrown, hand built, glazed, fired, kiln",
+        "negative": "Glass, metal, digital art, soft textures, textile"
+        },
+        "batik": {
+        "positive": "Batik, dyeing, resist techniques, wax, vibrant patterns, fabric art",
+        "negative": "Oil painting, digital art, glass, metal, monochromatic"
+        },
+        "felting": {
+        "positive": "Felt, wool, matting, condensed, molded, soft texture, handmade",
+        "negative": "Metal, glass, smooth textures, digital art, oil painting"
+        },
+        "marquetry": {
+        "positive": "Marquetry, veneer, inlaid, wood, intricate patterns, craftsmanship",
+        "negative": "Digital art, painting, textile, metal, glass"
+        },
+        "wildstyle-graffiti": {
+        "positive": "painted using spraypaint, complex design, large arrows weaving throughout scene, overlapping shapes, bright colors, gradients, dark shadows to make a 3D illusion, crisp, clean finish",
+        "negative": "photorealistic, digital art, messy, sloppy, rough sketch, splatters, 3d render, cartoon, Simple, legible letters, stencil art, monochrome, pixel art"
+        },
+        "bubble-graffiti": {
+        "positive": "painted using spraypaint, rounded inflated shapes, solid, bold colors, cartoon-like, 3D effect",
+        "negative": "photorealistic, digital art, 3d render, cartoon, Sharp angles, stencils, abstract shapes, watercolor effect"
+        },
+        "stencil-graffiti": {
+        "positive": "painted using spraypaint, cut-outs, stencilled, sharp edges, sprayed paint, layering, repetition",
+        "negative": "photorealistic, digital art, 3d render, cartoon, Freehand, abstract, wildstyle, 3D effects"
+        },
+        "throw-up-graffiti": {
+        "positive": "painted using spraypaint, quick, bubble shapes, two color scheme, fill-ins, outlined, bold",
+        "negative": "photorealistic, digital art, 3d render, cartoon, Detailed, complex, stenciled, realistic, multi-colored"
+        },
+        "tag-graffiti": {
+        "positive": "painted using spraypaint, handstyle, quick sketch, single color, stylish script, street",
+        "negative": "photorealistic, digital art, 3d render, cartoon, complex, multi-colored, stencil art, mural, realistic"
         }
     }
 }
