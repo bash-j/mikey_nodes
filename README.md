@@ -12,6 +12,38 @@ There are outputs for image size and prompts for the clip conditioners.
 
 Example workflow in the prompt_with_styles.json file.
 
+You can add your own styles to a file named user_styles.json in the root ComfyUI folder. You have to create this file yourself.
+
+The format needs to look like the following example:
+
+```json
+{
+    "styles": [
+        {
+            "style": "my photo",
+            "positive": "photograph, fujifilm, centered, high resolution",
+            "negative": "blurry, ugly, low resolution, cartooon"
+        }
+    ]
+}
+```
+
+You can also add your own custom ratios to a file named user_ratios.json in the root ComfyUI folder. You have to create this file yourself.
+
+The format needs to look like the following example:
+
+```json
+{
+    "ratios": [
+        {
+            "ratio": "1:1",
+            "width": 1024,
+            "height": 1024
+        }
+    ]
+}
+```
+
 ## Empty Latent Ratio Select SDXL
 
 This node allows you to select from a range of different aspect ratios.

@@ -35,37 +35,66 @@ def sdxl_size(width: int, height: int) -> (int, int):
                         h = 8 * j // 64 * 64
         return w, h
 
-class EmptyLatentRatioSelector:
-    ratio_sizes = ['1:1 [1024x1024 square]',
-                   '19:9 [1472x704 landscape]',
-                   '4:3 [1152x896 landscape]',
-                   '3:2 [1216x832 landscape]',
-                   '16:9 [1344x768 landscape]',
-                   '21:9 [1536x640 landscape]',
-                   '19:9 [1472x704 landscape]',
-                   '3:4 [896x1152 portrait]',
-                   '2:3 [832x1216 portrait]',
-                   '9:16 [768x1344 portrait]',
-                   '9:21 [640x1536 portrait]',
-                   '5:8 [768x1216 portrait]',
-                   '9:19 [704x1472 portrait]']
-    ratio_dict = {'1:1 [1024x1024 square]': (1024, 1024),
-                  '8:5 [1216x768 landscape]': (1216, 768),
-                  '4:3 [1152x896 landscape]': (1152, 832),
-                  '3:2 [1216x832 landscape]': (1216, 832),
-                  '16:9 [1344x768 landscape]': (1344, 768),
-                  '21:9 [1536x640 landscape]': (1536, 640),
-                  '19:9 [1472x704 landscape]': (1472, 704),
-                  '3:4 [896x1152 portrait]': (832, 1152),
-                  '2:3 [832x1216 portrait]': (832, 1216),
-                  '9:16 [768x1344 portrait]': (768, 1344),
-                  '9:21 [640x1536 portrait]': (640, 1536),
-                  '5:8 [768x1216 portrait]': (768, 1216),
-                  '9:19 [704x1472 portrait]': (704, 1472),
-                  }
+def read_ratios():
+    p = os.path.dirname(os.path.realpath(__file__))
+    file_path = os.path.join(p, 'ratios.json')
+    with open(file_path, 'r') as file:
+        data = json.load(file)
+    ratio_sizes = list(data['ratios'].keys())
+    ratio_dict = data['ratios']
+    # user_styles.json
+    user_styles_path = os.path.join(folder_paths.base_path, 'user_ratios.json')
+    # check if file exists
+    if os.path.isfile(user_styles_path):
+        # read json and update ratio_dict
+        with open(user_styles_path, 'r') as file:
+            user_data = json.load(file)
+        for ratio in user_data['ratios']:
+            ratio_dict[ratio] = user_data['ratios'][ratio]
+            ratio_sizes.append(ratio)
+    return ratio_sizes, ratio_dict
 
+def read_styles():
+    p = os.path.dirname(os.path.realpath(__file__))
+    file_path = os.path.join(p, 'styles.json')
+    with open(file_path, 'r') as file:
+        data = json.load(file)
+    # each style has a positive and negative key
+    """ start of json styles.json looks like this:
+    {
+    "styles": {
+        "none": {
+        "positive": "",
+        "negative": ""
+        },
+        "3d-model": {
+        "positive": "3d model, polygons, mesh, textures, lighting, rendering",
+        "negative": "2D representation, lack of depth and volume, no realistic rendering"
+        },
+    """
+    styles = list(data['styles'].keys())
+    pos_style = {}
+    neg_style = {}
+    for style in styles:
+        pos_style[style] = data['styles'][style]['positive']
+        neg_style[style] = data['styles'][style]['negative']
+    # user_styles.json
+    user_styles_path = os.path.join(folder_paths.base_path, 'user_styles.json')
+    # check if file exists
+    if os.path.isfile(user_styles_path):
+        # read json and update pos_style and neg_style
+        with open(user_styles_path, 'r') as file:
+            user_data = json.load(file)
+        for style in user_data['styles']:
+            pos_style[style] = user_data['styles'][style]['positive']
+            neg_style[style] = user_data['styles'][style]['negative']
+            styles.append(style)
+    return styles, pos_style, neg_style
+
+class EmptyLatentRatioSelector:
     @classmethod
     def INPUT_TYPES(s):
+        s.ratio_sizes, s.ratio_dict = read_ratios()
         return {'required': {'ratio_selected': (s.ratio_sizes,),
                              "batch_size": ("INT", {"default": 1, "min": 1, "max": 64})}}
 
@@ -74,8 +103,8 @@ class EmptyLatentRatioSelector:
     CATEGORY = 'sdxl'
 
     def generate(self, ratio_selected, batch_size=1):
-        width = self.ratio_dict[ratio_selected][0]
-        height = self.ratio_dict[ratio_selected][1]
+        width = self.ratio_dict[ratio_selected]["width"]
+        height = self.ratio_dict[ratio_selected]["height"]
         latent = torch.zeros([batch_size, 4, height // 8, width // 8])
         return ({"samples":latent}, )
 
@@ -144,9 +173,7 @@ class SaveImagesMikey:
 
     RETURN_TYPES = ()
     FUNCTION = "save_images"
-
     OUTPUT_NODE = True
-
     CATEGORY = "sdxl"
 
     def save_images(self, images, filename_prefix='', prompt=None, extra_pnginfo=None, positive_prompt='', negative_prompt=''):
@@ -182,38 +209,16 @@ class SaveImagesMikey:
         return { "ui": { "images": results } }
 
 class PromptWithStyle:
-    elrs = EmptyLatentRatioSelector()
+    #elrs = EmptyLatentRatioSelector()
 
     @classmethod
     def INPUT_TYPES(s):
-        # get path to same folder as this python file
-        p = os.path.dirname(os.path.realpath(__file__))
-        file_path = os.path.join(p, 'styles.json')
-        with open(file_path, 'r') as file:
-            data = json.load(file)
-        # each style has a positive and negative key
-        """ start of json styles.json looks like this:
-        {
-        "styles": {
-            "none": {
-            "positive": "",
-            "negative": ""
-            },
-            "3d-model": {
-            "positive": "3d model, polygons, mesh, textures, lighting, rendering",
-            "negative": "2D representation, lack of depth and volume, no realistic rendering"
-            },
-        """
-        s.styles = list(data['styles'].keys())
-        s.pos_style = {}
-        s.neg_style = {}
-        for style in s.styles:
-            s.pos_style[style] = data['styles'][style]['positive']
-            s.neg_style[style] = data['styles'][style]['negative']
+        s.ratio_sizes, s.ratio_dict = read_ratios()
+        s.styles, s.pos_style, s.neg_style = read_styles()
         return {"required": {"positive_prompt": ("STRING", {"multiline": True, 'default': 'Positive Prompt'}),
                              "negative_prompt": ("STRING", {"multiline": True, 'default': 'Negative Prompt'}),
                              "style": (s.styles,),
-                             "ratio_selected": (s.elrs.ratio_sizes,),
+                             "ratio_selected": (s.ratio_sizes,),
                              "batch_size": ("INT", {"default": 1, "min": 1, "max": 64}),
                              "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
                              }
@@ -280,8 +285,8 @@ class PromptWithStyle:
             neg_prompt = self.neg_style[style]
         else:
             neg_prompt = negative_prompt + ', ' + self.neg_style[style]
-        width = self.elrs.ratio_dict[ratio_selected][0]
-        height = self.elrs.ratio_dict[ratio_selected][1]
+        width = self.ratio_dict[ratio_selected]["width"]
+        height = self.ratio_dict[ratio_selected]["height"]
         latent = torch.zeros([batch_size, 4, height // 8, width // 8])
         refiner_width = width * 8
         refiner_height = height * 8
