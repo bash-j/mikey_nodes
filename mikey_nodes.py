@@ -41,7 +41,7 @@ class EmptyLatentRatioSelector:
                    '4:3 [1152x896 landscape]',
                    '3:2 [1216x832 landscape]',
                    '16:9 [1344x768 landscape]',
-                   '21:9 1536x640 landscape',
+                   '21:9 [1536x640 landscape]',
                    '19:9 [1472x704 landscape]',
                    '3:4 [896x1152 portrait]',
                    '2:3 [832x1216 portrait]',
