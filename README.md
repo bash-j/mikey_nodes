@@ -18,13 +18,12 @@ The format needs to look like the following example:
 
 ```json
 {
-    "styles": [
-        {
-            "style": "my photo",
-            "positive": "photograph, fujifilm, centered, high resolution",
-            "negative": "blurry, ugly, low resolution, cartooon"
+    "styles": {
+        "newspaper": {
+        "positive": "newspaper comic strip, panels, black and white",
+        "negative": "photograph, color"
         }
-    ]
+    }
 }
 ```
 
@@ -34,13 +33,9 @@ The format needs to look like the following example:
 
 ```json
 {
-    "ratios": [
-        {
-            "ratio": "1:1",
-            "width": 1024,
-            "height": 1024
-        }
-    ]
+    "ratios": {
+        "test": {"width": 1024, "height":  1024}
+    }
 }
 ```
 
