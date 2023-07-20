@@ -36,7 +36,19 @@ def sdxl_size(width: int, height: int) -> (int, int):
         return w, h
 
 class EmptyLatentRatioSelector:
-    ratio_sizes = ['1:1 [1024x1024 square]','19:9 [1472x704 landscape]','4:3 [1152x896 landscape]','3:2 [1216x832 landscape]','16:9 [1344x768 landscape]','21:9-1536x640 landscape','19:9[1472x704 landscape]','3:4 [896x1152 portrait]','2:3 [832x1216 portrait]','9:16 [768x1344 portrait]','9:21 [640x1536 portrait]','5:8 [768x1216 portrait]','9:19 [704x1472 portrait]']
+    ratio_sizes = ['1:1 [1024x1024 square]',
+                   '19:9 [1472x704 landscape]',
+                   '4:3 [1152x896 landscape]',
+                   '3:2 [1216x832 landscape]',
+                   '16:9 [1344x768 landscape]',
+                   '21:9 1536x640 landscape',
+                   '19:9 [1472x704 landscape]',
+                   '3:4 [896x1152 portrait]',
+                   '2:3 [832x1216 portrait]',
+                   '9:16 [768x1344 portrait]',
+                   '9:21 [640x1536 portrait]',
+                   '5:8 [768x1216 portrait]',
+                   '9:19 [704x1472 portrait]']
     ratio_dict = {'1:1 [1024x1024 square]': (1024, 1024),
                   '8:5 [1216x768 landscape]': (1216, 768),
                   '4:3 [1152x896 landscape]': (1152, 832),
