@@ -379,6 +379,87 @@ class PromptWithStyle:
                 refiner_width,
                 refiner_height,)
 
+class PromptWithSDXL:
+    @classmethod
+    def INPUT_TYPES(s):
+        s.ratio_sizes, s.ratio_dict = read_ratios()
+        return {"required": {"positive_prompt": ("STRING", {"multiline": True, 'default': 'Positive Prompt'}),
+                             "negative_prompt": ("STRING", {"multiline": True, 'default': 'Negative Prompt'}),
+                             "positive_style": ("STRING", {"multiline": True, 'default': 'Positive Style'}),
+                             "negative_style": ("STRING", {"multiline": True, 'default': 'Negative Style'}),
+                             "ratio_selected": (s.ratio_sizes,),
+                             "batch_size": ("INT", {"default": 1, "min": 1, "max": 64}),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff})
+                             }
+        }
+
+    RETURN_TYPES = ('LATENT','STRING','STRING','STRING','STRING','INT','INT','INT','INT',)
+    RETURN_NAMES = ('samples','positive_prompt_text_g','negative_prompt_text_g','positive_style_text_l',
+                    'negative_style_text_l','width','height','refiner_width','refiner_height',)
+    FUNCTION = 'start'
+    CATEGORY = 'Mikey'
+
+    def start(self, positive_prompt, negative_prompt, positive_style, negative_style, ratio_selected, batch_size, seed):
+        # wildcards always have a __ prefix and __ suffix
+        # regex to find all wildcards
+        # path to wildcard folder with matching wildcard.txt files is the root_project_dir/wildcards
+        wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
+        wildcard_regex = r'__.*?__'
+        pos_wildcard = ''
+        pos_seed = seed
+        for match in re.findall(wildcard_regex, positive_prompt):
+            # check for matching file in wildcard folder
+            if pos_wildcard == match:
+                pos_seed += 1
+            else:
+                pos_seed = seed
+            is_file = os.path.isfile(os.path.join(wildcard_path, match[2:-2] + '.txt'))
+            if is_file:
+                with open(os.path.join(wildcard_path, match[2:-2] + '.txt'), 'r') as file:
+                    wildcard_lines = file.readlines()
+                    # offset can be larger than the number of lines in the file, or it could even be a negative number
+                    # starting with line 0, so we need to use modulo to wrap around
+                    line_number = (pos_seed % len(wildcard_lines))
+                    # only replace the first match so that duplicates can be read from the next line
+                    positive_prompt = positive_prompt.replace(match, wildcard_lines[line_number].strip(), 1)
+                    pos_wildcard = match
+            else:
+                print(f'Wildcard file {match[2:-2]}.txt not found in {wildcard_path}')
+        neg_wildcard = ''
+        neg_seed = seed
+        for match in re.findall(wildcard_regex, negative_prompt):
+            # check for matching file in wildcard folder
+            if neg_wildcard == match:
+                neg_seed += 1
+            else:
+                neg_seed = seed
+            is_file = os.path.isfile(os.path.join(wildcard_path, match[2:-2] + '.txt'))
+            if is_file:
+                with open(os.path.join(wildcard_path, match[2:-2] + '.txt'), 'r') as file:
+                    wildcard_lines = file.readlines()
+                    # offset can be larger than the number of lines in the file, or it could even be a negative number
+                    # starting with line 0, so we need to use modulo to wrap around
+                    line_number = (neg_seed % len(wildcard_lines))
+                    negative_prompt = negative_prompt.replace(match, wildcard_lines[line_number].strip(), 1)
+                    neg_wildcard = match
+            else:
+                print(f'Wildcard file {match[2:-2]}.txt not found in {wildcard_path}')
+        width = self.ratio_dict[ratio_selected]["width"]
+        height = self.ratio_dict[ratio_selected]["height"]
+        latent = torch.zeros([batch_size, 4, height // 8, width // 8])
+        refiner_width = width * 8
+        refiner_height = height * 8
+        return ({"samples":latent},
+                str(positive_prompt),
+                str(negative_prompt),
+                str(positive_style),
+                str(negative_style),
+                width,
+                height,
+                refiner_width,
+                refiner_height,)
+
+
 class VAEDecode6GB:
     """ deprecated. update comfy to fix issue. """
     @classmethod
@@ -400,6 +481,7 @@ NODE_CLASS_MAPPINGS = {
     'Save Image With Prompt Data': SaveImagesMikey,
     'Resize Image for SDXL': ResizeImageSDXL,
     'Prompt With Style': PromptWithStyle,
+    'Prompt With SDXL': PromptWithSDXL,
     'HaldCLUT': HaldCLUT,
     'VAE Decode 6GB SDXL (deprecated)': VAEDecode6GB,
 }
