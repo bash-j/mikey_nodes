@@ -609,7 +609,7 @@
         7,
         "dpmpp_2s_ancestral",
         "simple",
-        20,
+        23,
         30,
         "enable"
       ],
@@ -938,10 +938,10 @@
         330,
         30
       ],
-      "size": [
-        940,
-        790
-      ],
+      "size": {
+        "0": 940,
+        "1": 790
+      },
       "flags": {
         "pinned": true
       },
@@ -1040,10 +1040,10 @@
         1730,
         -70
       ],
-      "size": [
-        180,
-        60
-      ],
+      "size": {
+        "0": 180,
+        "1": 60
+      },
       "flags": {
         "pinned": true
       },
@@ -1193,11 +1193,13 @@
         "Node name for S&R": "Prompt With Style"
       },
       "widgets_values": [
-        "a cute pomeranian dog in a garden",
-        "",
+        "Positive Prompt",
+        "Negative Prompt",
         "album-art",
-        "16:9",
-        1
+        "16:9 [1344x768 landscape]",
+        1,
+        0,
+        "randomize"
       ]
     },
     {

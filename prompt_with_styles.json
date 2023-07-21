@@ -924,11 +924,13 @@
         "Node name for S&R": "Prompt With Style"
       },
       "widgets_values": [
-        "man",
-        "",
+        "Positive Prompt",
+        "Negative Prompt",
         "photographic",
-        "1:1",
-        1
+        "1:1 [1024x1024 square]",
+        1,
+        0,
+        "randomize"
       ]
     }
   ],

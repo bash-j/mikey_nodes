@@ -1,7 +1,7 @@
 import datetime
 from fractions import Fraction
 import json
-from math import ceil
+from math import ceil, pow
 import os
 import re
 
@@ -91,6 +91,85 @@ def read_styles():
             styles.append(style)
     return styles, pos_style, neg_style
 
+def read_cluts():
+    p = os.path.dirname(os.path.realpath(__file__))
+    halddir = os.path.join(p, 'HaldCLUT')
+    files = [os.path.join(halddir, f) for f in os.listdir(halddir) if os.path.isfile(os.path.join(halddir, f)) and f.endswith('.png')]
+    return files
+
+def apply_hald_clut(hald_img, img):
+    hald_w, hald_h = hald_img.size
+    clut_size = int(round(pow(hald_w, 1/3)))
+    scale = (clut_size * clut_size - 1) / 255
+    img = np.asarray(img)
+
+    # Convert the HaldCLUT image to numpy array
+    hald_img_array = np.asarray(hald_img)
+
+    # If the HaldCLUT image is monochrome, duplicate its single channel to three
+    if len(hald_img_array.shape) == 2:
+        hald_img_array = np.stack([hald_img_array]*3, axis=-1)
+
+    hald_img_array = hald_img_array.reshape(clut_size ** 6, 3)
+
+    clut_r = np.rint(img[:, :, 0] * scale).astype(int)
+    clut_g = np.rint(img[:, :, 1] * scale).astype(int)
+    clut_b = np.rint(img[:, :, 2] * scale).astype(int)
+    filtered_image = np.zeros((img.shape))
+    filtered_image[:, :] = hald_img_array[clut_r + clut_size ** 2 * clut_g + clut_size ** 4 * clut_b]
+    filtered_image = Image.fromarray(filtered_image.astype('uint8'), 'RGB')
+    return filtered_image
+
+def gamma_correction_pil(image, gamma):
+    # Convert PIL Image to NumPy array
+    img_array = np.array(image)
+    # Normalization [0,255] -> [0,1]
+    img_array = img_array / 255.0
+    # Apply gamma correction
+    img_corrected = np.power(img_array, gamma)
+    # Convert corrected image back to original scale [0,1] -> [0,255]
+    img_corrected = np.uint8(img_corrected * 255)
+    # Convert NumPy array back to PIL Image
+    corrected_image = Image.fromarray(img_corrected)
+    return corrected_image
+
+# Tensor to PIL
+def tensor2pil(image):
+    return Image.fromarray(np.clip(255. * image.cpu().numpy().squeeze(), 0, 255).astype(np.uint8))
+
+# PIL to Tensor
+def pil2tensor(image):
+    return torch.from_numpy(np.array(image).astype(np.float32) / 255.0).unsqueeze(0)
+
+class HaldCLUT:
+    @classmethod
+    def INPUT_TYPES(s):
+        s.haldclut_files = read_cluts()
+        s.file_names = [os.path.basename(f) for f in s.haldclut_files]
+        return {"required": {"image": ("IMAGE",),
+                             "hald_clut": (s.file_names,),
+                             "gamma_correction": (['True','False'],)}}
+
+    RETURN_TYPES = ('IMAGE',)
+    RETURN_NAMES = ('image,')
+    FUNCTION = 'apply_haldclut'
+    CATEGORY = 'Mikey/Image'
+    OUTPUT_NODE = True
+
+    def apply_haldclut(self, image, hald_clut, gamma_correction):
+        hald_img = Image.open(self.haldclut_files[self.file_names.index(hald_clut)])
+        img = tensor2pil(image)
+        if gamma_correction == 'True':
+            corrected_img = gamma_correction_pil(img, 1.0/2.2)
+        else:
+            corrected_img = img
+        filtered_image = apply_hald_clut(hald_img, corrected_img).convert("RGB")
+        return (pil2tensor(filtered_image), )
+
+    @classmethod
+    def IS_CHANGED(self, hald_clut):
+        return (np.nan,)
+
 class EmptyLatentRatioSelector:
     @classmethod
     def INPUT_TYPES(s):
@@ -100,7 +179,7 @@ class EmptyLatentRatioSelector:
 
     RETURN_TYPES = ('LATENT',)
     FUNCTION = 'generate'
-    CATEGORY = 'sdxl'
+    CATEGORY = 'Mikey/Latent'
 
     def generate(self, ratio_selected, batch_size=1):
         width = self.ratio_dict[ratio_selected]["width"]
@@ -117,7 +196,7 @@ class EmptyLatentRatioCustom:
 
     RETURN_TYPES = ('LATENT',)
     FUNCTION = 'generate'
-    CATEGORY = 'sdxl'
+    CATEGORY = 'Mikey/Latent'
 
     def generate(self, width, height, batch_size=1):
         # solver
@@ -141,8 +220,8 @@ class ResizeImageSDXL:
                 "optional": { "mask": ("MASK", )}}
 
     RETURN_TYPES = ('IMAGE',)
-    FUNCTION = 'resize'
-    CATEGORY = 'sdxl'
+    FUNCTION = 'upscale'
+    CATEGORY = 'Mikey/Image'
 
     def upscale(self, image, upscale_method, width, height, crop):
         samples = image.movedim(-1,1)
@@ -174,7 +253,7 @@ class SaveImagesMikey:
     RETURN_TYPES = ()
     FUNCTION = "save_images"
     OUTPUT_NODE = True
-    CATEGORY = "sdxl"
+    CATEGORY = "Mikey/Image"
 
     def save_images(self, images, filename_prefix='', prompt=None, extra_pnginfo=None, positive_prompt='', negative_prompt=''):
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, self.output_dir, images[0].shape[1], images[0].shape[0])
@@ -228,7 +307,7 @@ class PromptWithStyle:
     RETURN_NAMES = ('samples','positive_prompt_text_g','negative_prompt_text_g','positive_style_text_l',
                     'negative_style_text_l','width','height','refiner_width','refiner_height',)
     FUNCTION = 'start'
-    CATEGORY = 'sdxl'
+    CATEGORY = 'Mikey'
 
     def start(self, positive_prompt, negative_prompt, style, ratio_selected, batch_size, seed):
         # wildcards always have a __ prefix and __ suffix
@@ -308,7 +387,7 @@ class VAEDecode6GB:
                              'samples': ('LATENT',)}}
     RETURN_TYPES = ('IMAGE',)
     FUNCTION = 'decode'
-    CATEGORY = 'sdxl'
+    CATEGORY = 'Mikey/Latent'
 
     def decode(self, vae, samples):
         unload_model()
@@ -321,6 +400,7 @@ NODE_CLASS_MAPPINGS = {
     'Save Image With Prompt Data': SaveImagesMikey,
     'Resize Image for SDXL': ResizeImageSDXL,
     'Prompt With Style': PromptWithStyle,
+    'HaldCLUT': HaldCLUT,
     'VAE Decode 6GB SDXL (deprecated)': VAEDecode6GB,
 }
 ## TODO
