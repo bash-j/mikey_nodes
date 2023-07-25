@@ -1,18 +1,28 @@
 import datetime
 from fractions import Fraction
+import importlib.util
 import json
 from math import ceil, pow
 import os
 import re
+import sys
 
 import numpy as np
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 import torch
 
+import folder_paths
+file_path = os.path.join(folder_paths.base_path, 'comfy_extras/nodes_clip_sdxl.py')
+module_name = "nodes_clip_sdxl"
+spec = importlib.util.spec_from_file_location(module_name, file_path)
+module = importlib.util.module_from_spec(spec)
+sys.modules[module_name] = module
+spec.loader.exec_module(module)
+from nodes_clip_sdxl import CLIPTextEncodeSDXL, CLIPTextEncodeSDXLRefiner
 from comfy.model_management import unload_model, soft_empty_cache
 import comfy.utils
-import folder_paths
+
 
 def sdxl_size(width: int, height: int) -> (int, int):
         # solver
@@ -90,6 +100,28 @@ def read_styles():
             neg_style[style] = user_data['styles'][style]['negative']
             styles.append(style)
     return styles, pos_style, neg_style
+
+def find_and_replace_wildcards(prompt, offset_seed):
+    # wildcards use the __file_name__ syntax
+    wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
+    wildcard_regex = r'__.*?__'
+    match_str = ''
+    offset = offset_seed
+    for match in re.findall(wildcard_regex, prompt):
+        if match_str == match:
+            offset += 1
+        else:
+            offset = offset_seed
+        is_file = os.path.isfile(os.path.join(wildcard_path, match[2:-2] + '.txt'))
+        if is_file:
+            with open(os.path.join(wildcard_path, match[2:-2] + '.txt'), 'r') as file:
+                wildcard_lines = file.readlines()
+                line_number = (offset % len(wildcard_lines))
+                prompt = prompt.replace(match, wildcard_lines[line_number].strip(), 1)
+                match_str = match
+        else:
+            print(f'Wildcard file {match[2:-2]}.txt not found in {wildcard_path}')
+    return prompt
 
 def read_cluts():
     p = os.path.dirname(os.path.realpath(__file__))
@@ -288,8 +320,6 @@ class SaveImagesMikey:
         return { "ui": { "images": results } }
 
 class PromptWithStyle:
-    #elrs = EmptyLatentRatioSelector()
-
     @classmethod
     def INPUT_TYPES(s):
         s.ratio_sizes, s.ratio_dict = read_ratios()
@@ -310,50 +340,8 @@ class PromptWithStyle:
     CATEGORY = 'Mikey'
 
     def start(self, positive_prompt, negative_prompt, style, ratio_selected, batch_size, seed):
-        # wildcards always have a __ prefix and __ suffix
-        # regex to find all wildcards
-        # path to wildcard folder with matching wildcard.txt files is the root_project_dir/wildcards
-        wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
-        wildcard_regex = r'__.*?__'
-        pos_wildcard = ''
-        pos_seed = seed
-        for match in re.findall(wildcard_regex, positive_prompt):
-            # check for matching file in wildcard folder
-            if pos_wildcard == match:
-                pos_seed += 1
-            else:
-                pos_seed = seed
-            is_file = os.path.isfile(os.path.join(wildcard_path, match[2:-2] + '.txt'))
-            if is_file:
-                with open(os.path.join(wildcard_path, match[2:-2] + '.txt'), 'r') as file:
-                    wildcard_lines = file.readlines()
-                    # offset can be larger than the number of lines in the file, or it could even be a negative number
-                    # starting with line 0, so we need to use modulo to wrap around
-                    line_number = (pos_seed % len(wildcard_lines))
-                    # only replace the first match so that duplicates can be read from the next line
-                    positive_prompt = positive_prompt.replace(match, wildcard_lines[line_number].strip(), 1)
-                    pos_wildcard = match
-            else:
-                print(f'Wildcard file {match[2:-2]}.txt not found in {wildcard_path}')
-        neg_wildcard = ''
-        neg_seed = seed
-        for match in re.findall(wildcard_regex, negative_prompt):
-            # check for matching file in wildcard folder
-            if neg_wildcard == match:
-                neg_seed += 1
-            else:
-                neg_seed = seed
-            is_file = os.path.isfile(os.path.join(wildcard_path, match[2:-2] + '.txt'))
-            if is_file:
-                with open(os.path.join(wildcard_path, match[2:-2] + '.txt'), 'r') as file:
-                    wildcard_lines = file.readlines()
-                    # offset can be larger than the number of lines in the file, or it could even be a negative number
-                    # starting with line 0, so we need to use modulo to wrap around
-                    line_number = (neg_seed % len(wildcard_lines))
-                    negative_prompt = negative_prompt.replace(match, wildcard_lines[line_number].strip(), 1)
-                    neg_wildcard = match
-            else:
-                print(f'Wildcard file {match[2:-2]}.txt not found in {wildcard_path}')
+        positive_prompt = find_and_replace_wildcards(positive_prompt, seed)
+        negative_prompt = find_and_replace_wildcards(negative_prompt, seed)
         if '{prompt}' in self.pos_style[style]:
             positive_prompt = self.pos_style[style].replace('{prompt}', positive_prompt)
         if positive_prompt == '' or positive_prompt == 'Positive Prompt' or positive_prompt is None:
@@ -367,8 +355,8 @@ class PromptWithStyle:
         width = self.ratio_dict[ratio_selected]["width"]
         height = self.ratio_dict[ratio_selected]["height"]
         latent = torch.zeros([batch_size, 4, height // 8, width // 8])
-        refiner_width = width * 8
-        refiner_height = height * 8
+        refiner_width = width * 4
+        refiner_height = height * 4
         return ({"samples":latent},
                 str(pos_prompt),
                 str(neg_prompt),
@@ -378,6 +366,52 @@ class PromptWithStyle:
                 height,
                 refiner_width,
                 refiner_height,)
+
+class PromptWithStyleV2:
+    @classmethod
+    def INPUT_TYPES(s):
+        s.ratio_sizes, s.ratio_dict = read_ratios()
+        s.styles, s.pos_style, s.neg_style = read_styles()
+        return {"required": {"positive_prompt": ("STRING", {"multiline": True, 'default': 'Positive Prompt'}),
+                             "negative_prompt": ("STRING", {"multiline": True, 'default': 'Negative Prompt'}),
+                             "style": (s.styles,),
+                             "ratio_selected": (s.ratio_sizes,),
+                             "batch_size": ("INT", {"default": 1, "min": 1, "max": 64}),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                             "clip_base": ("CLIP",), "clip_refiner": ("CLIP",),
+                             }
+        }
+
+    RETURN_TYPES = ('LATENT',
+                    'CONDITIONING','CONDITIONING','CONDITIONING','CONDITIONING',
+                    'STRING','STRING')
+    RETURN_NAMES = ('samples',
+                    'base_pos_cond','base_neg_cond','refiner_pos_cond','refiner_neg_cond',
+                    'positive_prompt','negative_prompt')
+
+    FUNCTION = 'start'
+    CATEGORY = 'Mikey'
+
+    def start(self, clip_base, clip_refiner, positive_prompt, negative_prompt, style, ratio_selected, batch_size, seed):
+        """ get output from PromptWithStyle.start """
+        (latent,
+         pos_prompt, neg_prompt,
+         pos_style, neg_style,
+         width, height,
+         refiner_width, refiner_height) = PromptWithStyle.start(self, positive_prompt,
+                                                                negative_prompt,
+                                                                style, ratio_selected,
+                                                                batch_size, seed)
+        # encode text
+        sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base, width, height, 0, 0, width, height, pos_prompt, pos_style)[0]
+        sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base, width, height, 0, 0, width, height, neg_prompt, neg_style)[0]
+        refiner_pos_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width, refiner_height, pos_prompt)[0]
+        refiner_neg_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width, refiner_height, neg_prompt)[0]
+        # return
+        return (latent,
+                sdxl_pos_cond, sdxl_neg_cond,
+                refiner_pos_cond, refiner_neg_cond,
+                pos_prompt, neg_prompt)
 
 class PromptWithSDXL:
     @classmethod
@@ -400,55 +434,13 @@ class PromptWithSDXL:
     CATEGORY = 'Mikey'
 
     def start(self, positive_prompt, negative_prompt, positive_style, negative_style, ratio_selected, batch_size, seed):
-        # wildcards always have a __ prefix and __ suffix
-        # regex to find all wildcards
-        # path to wildcard folder with matching wildcard.txt files is the root_project_dir/wildcards
-        wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
-        wildcard_regex = r'__.*?__'
-        pos_wildcard = ''
-        pos_seed = seed
-        for match in re.findall(wildcard_regex, positive_prompt):
-            # check for matching file in wildcard folder
-            if pos_wildcard == match:
-                pos_seed += 1
-            else:
-                pos_seed = seed
-            is_file = os.path.isfile(os.path.join(wildcard_path, match[2:-2] + '.txt'))
-            if is_file:
-                with open(os.path.join(wildcard_path, match[2:-2] + '.txt'), 'r') as file:
-                    wildcard_lines = file.readlines()
-                    # offset can be larger than the number of lines in the file, or it could even be a negative number
-                    # starting with line 0, so we need to use modulo to wrap around
-                    line_number = (pos_seed % len(wildcard_lines))
-                    # only replace the first match so that duplicates can be read from the next line
-                    positive_prompt = positive_prompt.replace(match, wildcard_lines[line_number].strip(), 1)
-                    pos_wildcard = match
-            else:
-                print(f'Wildcard file {match[2:-2]}.txt not found in {wildcard_path}')
-        neg_wildcard = ''
-        neg_seed = seed
-        for match in re.findall(wildcard_regex, negative_prompt):
-            # check for matching file in wildcard folder
-            if neg_wildcard == match:
-                neg_seed += 1
-            else:
-                neg_seed = seed
-            is_file = os.path.isfile(os.path.join(wildcard_path, match[2:-2] + '.txt'))
-            if is_file:
-                with open(os.path.join(wildcard_path, match[2:-2] + '.txt'), 'r') as file:
-                    wildcard_lines = file.readlines()
-                    # offset can be larger than the number of lines in the file, or it could even be a negative number
-                    # starting with line 0, so we need to use modulo to wrap around
-                    line_number = (neg_seed % len(wildcard_lines))
-                    negative_prompt = negative_prompt.replace(match, wildcard_lines[line_number].strip(), 1)
-                    neg_wildcard = match
-            else:
-                print(f'Wildcard file {match[2:-2]}.txt not found in {wildcard_path}')
+        positive_prompt = find_and_replace_wildcards(positive_prompt, seed)
+        negative_prompt = find_and_replace_wildcards(negative_prompt, seed)
         width = self.ratio_dict[ratio_selected]["width"]
         height = self.ratio_dict[ratio_selected]["height"]
         latent = torch.zeros([batch_size, 4, height // 8, width // 8])
-        refiner_width = width * 8
-        refiner_height = height * 8
+        refiner_width = width * 4
+        refiner_height = height * 4
         return ({"samples":latent},
                 str(positive_prompt),
                 str(negative_prompt),
@@ -458,7 +450,6 @@ class PromptWithSDXL:
                 height,
                 refiner_width,
                 refiner_height,)
-
 
 class VAEDecode6GB:
     """ deprecated. update comfy to fix issue. """
@@ -481,6 +472,7 @@ NODE_CLASS_MAPPINGS = {
     'Save Image With Prompt Data': SaveImagesMikey,
     'Resize Image for SDXL': ResizeImageSDXL,
     'Prompt With Style': PromptWithStyle,
+    'Prompt With Style V2': PromptWithStyleV2, # 'Prompt With Style V2
     'Prompt With SDXL': PromptWithSDXL,
     'HaldCLUT': HaldCLUT,
     'VAE Decode 6GB SDXL (deprecated)': VAEDecode6GB,
