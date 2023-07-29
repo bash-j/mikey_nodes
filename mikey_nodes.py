@@ -572,7 +572,7 @@ class PromptWithStyleV3:
         if len(style_prompts) == 0:
             style_ = 'none'
             pos_prompt_, neg_prompt_ = self.parse_prompts(positive_prompt, negative_prompt, style_, seed)
-            pos_style_, neg_style_ = '', ''
+            pos_style_, neg_style_ = pos_prompt_, neg_prompt_
             # encode text
             sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base_pos, width, height, 0, 0, width, height, pos_prompt, pos_style_)[0]
             sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base_neg, width, height, 0, 0, width, height, neg_prompt, neg_style_)[0]
