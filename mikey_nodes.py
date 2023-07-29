@@ -11,6 +11,7 @@ import numpy as np
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 import torch
+import torch.nn.functional as F
 
 import folder_paths
 file_path = os.path.join(folder_paths.base_path, 'comfy_extras/nodes_clip_sdxl.py')
@@ -21,6 +22,7 @@ sys.modules[module_name] = module
 spec.loader.exec_module(module)
 from nodes_clip_sdxl import CLIPTextEncodeSDXL, CLIPTextEncodeSDXLRefiner
 from comfy.model_management import unload_model, soft_empty_cache
+from nodes import LoraLoader, ConditioningAverage, common_ksampler
 import comfy.utils
 
 
@@ -451,6 +453,225 @@ class PromptWithSDXL:
                 refiner_width,
                 refiner_height,)
 
+class PromptWithStyleV3:
+    def __init__(self):
+        self.loaded_lora = None
+
+    @classmethod
+    def INPUT_TYPES(s):
+        s.ratio_sizes, s.ratio_dict = read_ratios()
+        s.styles, s.pos_style, s.neg_style = read_styles()
+        s.fit = ['true','false']
+        s.custom_size = ['true', 'false']
+        return {"required": {"positive_prompt": ("STRING", {"multiline": True, 'default': 'Positive Prompt'}),
+                             "negative_prompt": ("STRING", {"multiline": True, 'default': 'Negative Prompt'}),
+                             "ratio_selected": (s.ratio_sizes,),
+                             "custom_size": (s.custom_size,),
+                             "fit_custom_size": (s.fit,),
+                             "custom_width": ("INT", {"default": 1024, "min": 1, "max": 8192, "step": 1}),
+                             "custom_height": ("INT", {"default": 1024, "min": 1, "max": 8192, "step": 1}),
+                             "batch_size": ("INT", {"default": 1, "min": 1, "max": 64}),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                             "base_model": ("MODEL",), "clip_base": ("CLIP",), "clip_refiner": ("CLIP",),
+                             }
+        }
+
+    RETURN_TYPES = ('MODEL','LATENT',
+                    'CONDITIONING','CONDITIONING','CONDITIONING','CONDITIONING',
+                    'STRING','STRING')
+    RETURN_NAMES = ('base_model','samples',
+                    'base_pos_cond','base_neg_cond','refiner_pos_cond','refiner_neg_cond',
+                    'positive_prompt','negative_prompt')
+
+    FUNCTION = 'start'
+    CATEGORY = 'Mikey'
+
+    def extract_and_load_loras(self, text, model, clip):
+        # load loras detected in the prompt text
+        # The text for adding LoRA to the prompt, <lora:filename:multiplier>, is only used to enable LoRA, and is erased from prompt afterwards
+        # The multiplier is optional, and defaults to 1.0
+        # We update the model and clip, and return the new model and clip with the lora prompt stripped from the text
+        # If multiple lora prompts are detected we chain them together like: original clip > clip_with_lora1 > clip_with_lora2 > clip_with_lora3 > etc
+        lora_re = r'<lora:(.*?)(?::(.*?))?>'
+        # find all lora prompts
+        lora_prompts = re.findall(lora_re, text)
+        stripped_text = text
+        # if we found any lora prompts
+        if len(lora_prompts) > 0:
+            # loop through each lora prompt
+            for lora_prompt in lora_prompts:
+                # get the lora filename
+                lora_filename = lora_prompt[0]
+                # check for file extension in filename
+                if '.safetensors' not in lora_filename:
+                    lora_filename += '.safetensors'
+                # get the lora multiplier
+                lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
+                # apply the lora to the clip using the LoraLoader.load_lora function
+                # def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
+                # ...
+                # return (model_lora, clip_lora)
+                # apply the lora to the clip
+                model, clip_lora = LoraLoader.load_lora(self, model, clip, lora_filename, lora_multiplier, lora_multiplier)
+                stripped_text = stripped_text.replace(f'<lora:{lora_filename}:{lora_multiplier}>', '')
+        return model, clip, stripped_text
+
+    def parse_prompts(self, positive_prompt, negative_prompt, style, seed):
+        positive_prompt = find_and_replace_wildcards(positive_prompt, seed)
+        negative_prompt = find_and_replace_wildcards(negative_prompt, seed)
+        if '{prompt}' in self.pos_style[style]:
+            positive_prompt = self.pos_style[style].replace('{prompt}', positive_prompt)
+        if positive_prompt == '' or positive_prompt == 'Positive Prompt' or positive_prompt is None:
+            pos_prompt = self.pos_style[style]
+        else:
+            pos_prompt = positive_prompt + ', ' + self.pos_style[style]
+        if negative_prompt == '' or negative_prompt == 'Negative Prompt' or negative_prompt is None:
+            neg_prompt = self.neg_style[style]
+        else:
+            neg_prompt = negative_prompt + ', ' + self.neg_style[style]
+        return pos_prompt, neg_prompt
+
+    def start(self, base_model, clip_base, clip_refiner, positive_prompt, negative_prompt, ratio_selected, batch_size, seed,
+              custom_size='false', fit_custom_size='false', custom_width=1024, custom_height=1024):
+        if custom_size == 'true':
+            if fit_custom_size == 'true':
+                if custom_width == 1 and custom_height == 1:
+                    width, height = 1024, 1024
+                if custom_width == custom_height:
+                    width, height = 1024, 1024
+                if f'{custom_width}:{custom_height}' in self.ratio_dict:
+                    width, height = self.ratio_dict[f'{custom_width}:{custom_height}']
+                else:
+                    width, height = sdxl_size(custom_width, custom_height)
+            else:
+                width, height = custom_width, custom_height
+        else:
+            width = self.ratio_dict[ratio_selected]["width"]
+            height = self.ratio_dict[ratio_selected]["height"]
+
+        latent = torch.zeros([batch_size, 4, height // 8, width // 8])
+        print(batch_size, 4, height // 8, width // 8)
+        refiner_width = width * 4
+        refiner_height = height * 4
+
+        # extract and load loras
+        base_model, clip_base_pos, pos_prompt = self.extract_and_load_loras(positive_prompt, base_model, clip_base)
+        base_model, clip_base_neg, neg_prompt = self.extract_and_load_loras(negative_prompt, base_model, clip_base)
+        # find and replace style syntax
+        # <style:style_name> will update the selected style
+        style_re = r'<style:(.*?)>'
+        pos_style_prompts = re.findall(style_re, pos_prompt)
+        neg_style_prompts = re.findall(style_re, neg_prompt)
+        # concat style prompts
+        style_prompts = pos_style_prompts + neg_style_prompts
+        print(style_prompts)
+        base_pos_conds = []
+        base_neg_conds = []
+        refiner_pos_conds = []
+        refiner_neg_conds = []
+        if len(style_prompts) == 0:
+            style_ = 'none'
+            pos_prompt_, neg_prompt_ = self.parse_prompts(positive_prompt, negative_prompt, style_, seed)
+            pos_style_, neg_style_ = '', ''
+            # encode text
+            sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base_pos, width, height, 0, 0, width, height, pos_prompt, pos_style_)[0]
+            sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base_neg, width, height, 0, 0, width, height, neg_prompt, neg_style_)[0]
+            refiner_pos_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width, refiner_height, pos_prompt)[0]
+            refiner_neg_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width, refiner_height, neg_prompt)[0]
+            return (base_model, {"samples":latent},
+                    sdxl_pos_cond, sdxl_neg_cond,
+                    refiner_pos_cond, refiner_neg_cond,
+                    pos_prompt, neg_prompt)
+
+        for style_prompt in style_prompts:
+            """ get output from PromptWithStyle.start """
+            # strip all style syntax from prompt
+            style_ = style_prompt
+            print(style_ in self.styles)
+            if style_ not in self.styles:
+                style_ = 'none'
+                continue
+            pos_prompt_ = re.sub(style_re, '', pos_prompt)
+            neg_prompt_ = re.sub(style_re, '', neg_prompt)
+            pos_prompt_, neg_prompt_ = self.parse_prompts(pos_prompt_, neg_prompt_, style_, seed)
+            pos_style_, neg_style_ = str(self.pos_style[style_]), str(self.neg_style[style_])
+            width_, height_ = width, height
+            refiner_width_, refiner_height_ = refiner_width, refiner_height
+            # encode text
+            base_pos_conds.append(CLIPTextEncodeSDXL.encode(self, clip_base_pos, width_, height_, 0, 0, width_, height_, pos_prompt_, pos_style_)[0])
+            base_neg_conds.append(CLIPTextEncodeSDXL.encode(self, clip_base_neg, width_, height_, 0, 0, width_, height_, neg_prompt_, neg_style_)[0])
+            refiner_pos_conds.append(CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width_, refiner_height_, pos_prompt_)[0])
+            refiner_neg_conds.append(CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width_, refiner_height_, neg_prompt_)[0])
+
+        # loop through conds and add them together
+        sdxl_pos_cond = base_pos_conds[0]
+        weight = 1
+        if len(base_pos_conds) > 1:
+            for i in range(1, len(base_pos_conds)):
+                weight += 1
+                sdxl_pos_cond = ConditioningAverage.addWeighted(self, base_pos_conds[i], sdxl_pos_cond, 1 / weight)[0]
+        sdxl_neg_cond = base_neg_conds[0]
+        weight = 1
+        if len(base_neg_conds) > 1:
+            for i in range(1, len(base_neg_conds)):
+                weight += 1
+                sdxl_neg_cond = ConditioningAverage.addWeighted(self, base_neg_conds[i], sdxl_neg_cond, 1 / weight)[0]
+        refiner_pos_cond = refiner_pos_conds[0]
+        weight = 1
+        if len(refiner_pos_conds) > 1:
+            for i in range(1, len(refiner_pos_conds)):
+                weight += 1
+                refiner_pos_cond = ConditioningAverage.addWeighted(self, refiner_pos_conds[i], refiner_pos_cond, 1 / weight)[0]
+        refiner_neg_cond = refiner_neg_conds[0]
+        weight = 1
+        if len(refiner_neg_conds) > 1:
+            for i in range(1, len(refiner_neg_conds)):
+                weight += 1
+                refiner_neg_cond = ConditioningAverage.addWeighted(self, refiner_neg_conds[i], refiner_neg_cond, 1 / weight)[0]
+        # return
+        return (base_model, {"samples":latent},
+                sdxl_pos_cond, sdxl_neg_cond,
+                refiner_pos_cond, refiner_neg_cond,
+                pos_prompt, neg_prompt)
+
+class PromptWithSDXL:
+    @classmethod
+    def INPUT_TYPES(s):
+        s.ratio_sizes, s.ratio_dict = read_ratios()
+        return {"required": {"positive_prompt": ("STRING", {"multiline": True, 'default': 'Positive Prompt'}),
+                             "negative_prompt": ("STRING", {"multiline": True, 'default': 'Negative Prompt'}),
+                             "positive_style": ("STRING", {"multiline": True, 'default': 'Positive Style'}),
+                             "negative_style": ("STRING", {"multiline": True, 'default': 'Negative Style'}),
+                             "ratio_selected": (s.ratio_sizes,),
+                             "batch_size": ("INT", {"default": 1, "min": 1, "max": 64}),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff})
+                             }
+        }
+
+    RETURN_TYPES = ('LATENT','STRING','STRING','STRING','STRING','INT','INT','INT','INT',)
+    RETURN_NAMES = ('samples','positive_prompt_text_g','negative_prompt_text_g','positive_style_text_l',
+                    'negative_style_text_l','width','height','refiner_width','refiner_height',)
+    FUNCTION = 'start'
+    CATEGORY = 'Mikey'
+
+    def start(self, positive_prompt, negative_prompt, positive_style, negative_style, ratio_selected, batch_size, seed):
+        positive_prompt = find_and_replace_wildcards(positive_prompt, seed)
+        negative_prompt = find_and_replace_wildcards(negative_prompt, seed)
+        width = self.ratio_dict[ratio_selected]["width"]
+        height = self.ratio_dict[ratio_selected]["height"]
+        latent = torch.zeros([batch_size, 4, height // 8, width // 8])
+        refiner_width = width * 4
+        refiner_height = height * 4
+        return ({"samples":latent},
+                str(positive_prompt),
+                str(negative_prompt),
+                str(positive_style),
+                str(negative_style),
+                width,
+                height,
+                refiner_width,
+                refiner_height,)
+
 class VAEDecode6GB:
     """ deprecated. update comfy to fix issue. """
     @classmethod
@@ -459,7 +680,7 @@ class VAEDecode6GB:
                              'samples': ('LATENT',)}}
     RETURN_TYPES = ('IMAGE',)
     FUNCTION = 'decode'
-    CATEGORY = 'Mikey/Latent'
+    #CATEGORY = 'Mikey/Latent'
 
     def decode(self, vae, samples):
         unload_model()
@@ -472,11 +693,9 @@ NODE_CLASS_MAPPINGS = {
     'Save Image With Prompt Data': SaveImagesMikey,
     'Resize Image for SDXL': ResizeImageSDXL,
     'Prompt With Style': PromptWithStyle,
-    'Prompt With Style V2': PromptWithStyleV2, # 'Prompt With Style V2
+    'Prompt With Style V2': PromptWithStyleV2,
     'Prompt With SDXL': PromptWithSDXL,
+    'Prompt With Style V3': PromptWithStyleV3,
     'HaldCLUT': HaldCLUT,
     'VAE Decode 6GB SDXL (deprecated)': VAEDecode6GB,
 }
-## TODO
-# Resize Image and return the new width and height
-# SDXL Ultimate Upscaler?
