@@ -106,23 +106,33 @@ def read_styles():
 def find_and_replace_wildcards(prompt, offset_seed):
     # wildcards use the __file_name__ syntax
     wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
-    wildcard_regex = r'__.*?__'
+    wildcard_regex = r'__(.*?)__'
     match_str = ''
     offset = offset_seed
     for match in re.findall(wildcard_regex, prompt):
+        print(f'Wildcard match: {match}')
         if match_str == match:
             offset += 1
         else:
             offset = offset_seed
-        is_file = os.path.isfile(os.path.join(wildcard_path, match[2:-2] + '.txt'))
+        match_parts = match.split('/')
+        if len(match_parts) > 1:
+            wildcard_dir = os.path.join(*match_parts[:-1])
+            wildcard_file = match_parts[-1]
+        else:
+            wildcard_dir = ''
+            wildcard_file = match_parts[0]
+        search_path = os.path.join(wildcard_path, wildcard_dir)
+        is_file = os.path.isfile(os.path.join(search_path, wildcard_file + '.txt'))
         if is_file:
-            with open(os.path.join(wildcard_path, match[2:-2] + '.txt'), 'r') as file:
+            with open(os.path.join(search_path, wildcard_file + '.txt'), 'r', encoding='utf-8') as file:
                 wildcard_lines = file.readlines()
                 line_number = (offset % len(wildcard_lines))
-                prompt = prompt.replace(match, wildcard_lines[line_number].strip(), 1)
+                prompt = prompt.replace(f"__{match}__", wildcard_lines[line_number].strip(), 1)
                 match_str = match
+                print('Wildcard prompt selected: ' + wildcard_lines[line_number].strip())
         else:
-            print(f'Wildcard file {match[2:-2]}.txt not found in {wildcard_path}')
+            print(f'Wildcard file {wildcard_file}.txt not found in {search_path}')
     return prompt
 
 def read_cluts():
@@ -268,6 +278,36 @@ class ResizeImageSDXL:
         print('Resizing image from {}x{} to {}x{}'.format(image.shape[2], image.shape[1], w, h))
         img = self.upscale(image, upscale_method, w, h, crop)[0]
         return (img, )
+
+class BatchResizeImageSDXL(ResizeImageSDXL):
+    crop_methods = ["disabled", "center"]
+    upscale_methods = ["nearest-exact", "bilinear", "area", "bicubic"]
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"image_directory": ("STRING", {"multiline": False, "placeholder": "Image Directory"}),
+                             "upscale_method": (s.upscale_methods,),
+                             "crop": (s.crop_methods,)},}
+
+    RETURN_TYPES = ('IMAGE',)
+    RETURN_NAMES = ('image',)
+    FUNCTION = 'batch'
+    CATEGORY = 'Mikey/Image'
+    OUTPUT_IS_LIST = (True, )
+
+    def batch(self, image_directory, upscale_method, crop):
+        if not os.path.exists(image_directory):
+            raise Exception(f"Image directory {image_directory} does not exist")
+
+        images = []
+        for file in os.listdir(image_directory):
+            if file.endswith('.png') or file.endswith('.jpg') or file.endswith('.jpeg') or file.endswith('.webp') or file.endswith('.bmp') or file.endswith('.gif'):
+                img = Image.open(os.path.join(image_directory, file))
+                img = pil2tensor(img)
+                # resize image
+                img = self.resize(img, upscale_method, crop)[0]
+                images.append(img)
+        return (images,)
 
 class SaveImagesMikey:
     def __init__(self):
@@ -692,6 +732,7 @@ NODE_CLASS_MAPPINGS = {
     'Empty Latent Ratio Custom SDXL': EmptyLatentRatioCustom,
     'Save Image With Prompt Data': SaveImagesMikey,
     'Resize Image for SDXL': ResizeImageSDXL,
+    'Batch Resize Image for SDXL': BatchResizeImageSDXL,
     'Prompt With Style': PromptWithStyle,
     'Prompt With Style V2': PromptWithStyleV2,
     'Prompt With SDXL': PromptWithSDXL,
