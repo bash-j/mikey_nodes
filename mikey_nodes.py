@@ -157,7 +157,7 @@ def find_and_replace_wildcards(prompt, offset_seed):
                     selected_lines = wildcard_lines.pop(offset % len(wildcard_lines))
                     for i in range(1, lines_to_insert):
                         selected_lines += wildcard_lines.pop(random.randint(0, len(wildcard_lines) - 1))
-                replacement_text = ''.join(selected_lines).strip()
+                replacement_text = ','.join(selected_lines).strip()
                 prompt = prompt.replace(f"{full_match}__{actual_match}__", replacement_text, 1)
                 match_str = actual_match
                 print('Wildcard prompt selected: ' + replacement_text)
