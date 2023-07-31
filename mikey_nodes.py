@@ -2,7 +2,7 @@ import datetime
 from fractions import Fraction
 import importlib.util
 import json
-from math import ceil, pow
+from math import ceil, pow, gcd
 import os
 import random
 import re
@@ -26,27 +26,45 @@ from comfy.model_management import unload_model, soft_empty_cache
 from nodes import LoraLoader, ConditioningAverage, common_ksampler
 import comfy.utils
 
+def find_latent_size(width: int, height: int, res: int = 1024) -> (int, int):
+    best_w = 0
+    best_h = 0
+    target_ratio = Fraction(width, height)
 
-def sdxl_size(width: int, height: int) -> (int, int):
-        # solver
-        w = 0
-        h = 0
-        for i in range(1, 256):
-            for j in range(1, 256):
-                if Fraction(8 * i, 8 * j) > Fraction(width, height) * 0.98 and Fraction(8 * i, 8 * j) < Fraction(width, height) and 8 * i * 8 * j <= 1024 * 1024:
-                    if (ceil(8 * i / 64) * 64) * (ceil(8 * j / 64) * 64) <= 1024 * 1024:
-                        w = ceil(8 * i / 64) * 64
-                        h = ceil(8 * j / 64) * 64
-                    elif (8 * i // 64 * 64) * (ceil(8 * j / 64) * 64) <= 1024 * 1024:
-                        w = 8 * i // 64 * 64
-                        h = ceil(8 * j / 64) * 64
-                    elif (ceil(8 * i / 64) * 64) * (8 * j // 64 * 64) <= 1024 * 1024:
-                        w = ceil(8 * i / 64) * 64
-                        h = 8 * j // 64 * 64
-                    else:
-                        w = 8 * i // 64 * 64
-                        h = 8 * j // 64 * 64
-        return w, h
+    for i in range(1, 256):
+        for j in range(1, 256):
+            if Fraction(8 * i, 8 * j) > target_ratio * 0.98 and Fraction(8 * i, 8 * j) < target_ratio and 8 * i * 8 * j <= res * res:
+                candidates = [
+                    (ceil(8 * i / 64) * 64, ceil(8 * j / 64) * 64),
+                    (8 * i // 64 * 64, ceil(8 * j / 64) * 64),
+                    (ceil(8 * i / 64) * 64, 8 * j // 64 * 64),
+                    (8 * i // 64 * 64, 8 * j // 64 * 64),
+                ]
+                for w, h in candidates:
+                    if w * h > res * res:
+                        continue
+                    if w * h > best_w * best_h:
+                        best_w, best_h = w, h
+    return best_w, best_h
+
+def find_tile_dimensions(width: int, height: int, multiplier: float, res: int) -> (int, int):
+    # Convert the multiplier to a fraction
+    multiplier_fraction = Fraction(multiplier).limit_denominator()
+
+    total_width = width * multiplier_fraction.numerator // multiplier_fraction.denominator
+    total_height = height * multiplier_fraction.numerator // multiplier_fraction.denominator
+
+    target_area = res * res
+
+    step = 8  # Fixed step size of 8 to ensure both dimensions are multiples of 8
+    maximum = res * 2
+    for h in range(step, maximum + 1, step):
+        w = target_area // h
+        # Checking that both w and h are multiples of 8, and that the dimensions meet the criteria
+        if w * h == target_area and w <= total_width and h <= total_height and w < maximum and h < maximum:
+            return w, h
+
+    return None, None
 
 def read_ratios():
     p = os.path.dirname(os.path.realpath(__file__))
@@ -103,38 +121,6 @@ def read_styles():
             neg_style[style] = user_data['styles'][style]['negative']
             styles.append(style)
     return styles, pos_style, neg_style
-
-#def find_and_replace_wildcards(prompt, offset_seed):
-#    # wildcards use the __file_name__ syntax
-#    wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
-#    wildcard_regex = r'__(.*?)__'
-#    match_str = ''
-#    offset = offset_seed
-#    for match in re.findall(wildcard_regex, prompt):
-#        print(f'Wildcard match: {match}')
-#        if match_str == match:
-#            offset += 1
-#        else:
-#            offset = offset_seed
-#        match_parts = match.split('/')
-#        if len(match_parts) > 1:
-#            wildcard_dir = os.path.join(*match_parts[:-1])
-#            wildcard_file = match_parts[-1]
-#        else:
-#            wildcard_dir = ''
-#            wildcard_file = match_parts[0]
-#        search_path = os.path.join(wildcard_path, wildcard_dir)
-#        is_file = os.path.isfile(os.path.join(search_path, wildcard_file + '.txt'))
-#        if is_file:
-#            with open(os.path.join(search_path, wildcard_file + '.txt'), 'r', encoding='utf-8') as file:
-#                wildcard_lines = file.readlines()
-#                line_number = (offset % len(wildcard_lines))
-#                prompt = prompt.replace(f"__{match}__", wildcard_lines[line_number].strip(), 1)
-#                match_str = match
-#                print('Wildcard prompt selected: ' + wildcard_lines[line_number].strip())
-#        else:
-#            print(f'Wildcard file {wildcard_file}.txt not found in {search_path}')
-#    return prompt
 
 def find_and_replace_wildcards(prompt, offset_seed):
     # wildcards use the __file_name__ syntax
@@ -268,6 +254,7 @@ class EmptyLatentRatioSelector:
 class EmptyLatentRatioCustom:
     @classmethod
     def INPUT_TYPES(s):
+        s.ratio_sizes, s.ratio_dict = read_ratios()
         return {"required": { "width": ("INT", {"default": 1024, "min": 1, "max": 8192, "step": 1}),
                               "height": ("INT", {"default": 1024, "min": 1, "max": 8192, "step": 1}),
                               "batch_size": ("INT", {"default": 1, "min": 1, "max": 64})}}
@@ -278,12 +265,12 @@ class EmptyLatentRatioCustom:
 
     def generate(self, width, height, batch_size=1):
         # solver
-        if width == 1 and height == 1:
+        if width == 1 and height == 1 or width == height:
             w, h = 1024, 1024
-        if f'{width}:{height}' in EmptyLatentRatioSelector.ratio_dict:
-            w, h = EmptyLatentRatioSelector.ratio_dict[f'{width}:{height}']
+        if f'{width}:{height}' in self.ratio_dict:
+            w, h = self.ratio_dict[f'{width}:{height}']
         else:
-            w, h = sdxl_size(width, height)
+            w, h = find_latent_size(width, height)
         latent = torch.zeros([batch_size, 4, h // 8, w // 8])
         return ({"samples":latent}, )
 
@@ -308,7 +295,7 @@ class ResizeImageSDXL:
         return (s,)
 
     def resize(self, image, upscale_method, crop):
-        w, h = sdxl_size(image.shape[2], image.shape[1])
+        w, h = find_latent_size(image.shape[2], image.shape[1])
         print('Resizing image from {}x{} to {}x{}'.format(image.shape[2], image.shape[1], w, h))
         img = self.upscale(image, upscale_method, w, h, crop)[0]
         return (img, )
@@ -616,7 +603,7 @@ class PromptWithStyleV3:
                 if f'{custom_width}:{custom_height}' in self.ratio_dict:
                     width, height = self.ratio_dict[f'{custom_width}:{custom_height}']
                 else:
-                    width, height = sdxl_size(custom_width, custom_height)
+                    width, height = find_latent_size(custom_width, custom_height)
             else:
                 width, height = custom_width, custom_height
         else:
@@ -746,6 +733,45 @@ class PromptWithSDXL:
                 refiner_width,
                 refiner_height,)
 
+class UpscaleTileCalculator:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {'required': {'image': ('IMAGE',),
+                             'upscale_by': ('FLOAT', {'default': 1.0, 'min': 0.1, 'max': 10.0, 'step': 0.1}),
+                             'tile_resolution': ('INT', {'default': 512, 'min': 1, 'max': 8192, 'step': 8})}}
+
+    RETURN_TYPES = ('IMAGE', 'FLOAT', 'INT', 'INT')
+    RETURN_NAMES = ('image', 'upscale_by', 'tile_width', 'tile_height')
+    FUNCTION = 'calculate'
+    CATEGORY = 'Mikey/Image'
+
+    def upscale(self, image, upscale_method, width, height, crop):
+        samples = image.movedim(-1,1)
+        s = comfy.utils.common_upscale(samples, width, height, upscale_method, crop)
+        s = s.movedim(1,-1)
+        return (s,)
+
+    def resize(self, image, width, height, upscale_method, crop):
+        w, h = find_latent_size(image.shape[2], image.shape[1])
+        print('Resizing image from {}x{} to {}x{}'.format(image.shape[2], image.shape[1], w, h))
+        img = self.upscale(image, upscale_method, w, h, crop)[0]
+        return (img, )
+
+    def calculate(self, image, upscale_by, tile_resolution):
+        # get width and height from the image
+        width, height = image.shape[2], image.shape[1]
+        # calculate new width and height // 8
+        new_width = width * upscale_by // 8 * 8
+        new_height = height * upscale_by // 8 * 8
+        # corrected upscale_by value
+        upscale_by = new_width / width
+        # tile_resolution using the find_tile_dimensions function
+        tile_width, tile_height = find_tile_dimensions(width, height, upscale_by, tile_resolution)
+        image = self.resize(image, new_width // tile_width, new_height // tile_height, 'nearest-exact',  'center')[0]
+        return (image, upscale_by, tile_width, tile_height)
+
+""" Deprecated Nodes """
+
 class VAEDecode6GB:
     """ deprecated. update comfy to fix issue. """
     @classmethod
@@ -766,6 +792,7 @@ NODE_CLASS_MAPPINGS = {
     'Empty Latent Ratio Custom SDXL': EmptyLatentRatioCustom,
     'Save Image With Prompt Data': SaveImagesMikey,
     'Resize Image for SDXL': ResizeImageSDXL,
+    'Upscale Tile Calculator': UpscaleTileCalculator,
     'Batch Resize Image for SDXL': BatchResizeImageSDXL,
     'Prompt With Style': PromptWithStyle,
     'Prompt With Style V2': PromptWithStyleV2,
