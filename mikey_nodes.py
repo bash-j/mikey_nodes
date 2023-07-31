@@ -760,15 +760,18 @@ class UpscaleTileCalculator:
     def calculate(self, image, upscale_by, tile_resolution):
         # get width and height from the image
         width, height = image.shape[2], image.shape[1]
-        # calculate new width and height // 8
-        new_width = width * upscale_by // 8 * 8
-        new_height = height * upscale_by // 8 * 8
-        # corrected upscale_by value
-        upscale_by = new_width / width
+        new_image = self.resize(image, width * upscale_by, height * upscale_by, 'nearest-exact', 'center')[0]
+        new_width, new_height = new_image.shape[2], new_image.shape[1]
+        corrected_upscale_by = (new_width * new_height) / (width * height)
         # tile_resolution using the find_tile_dimensions function
-        tile_width, tile_height = find_tile_dimensions(width, height, upscale_by, tile_resolution)
-        image = self.resize(image, new_width // tile_width, new_height // tile_height, 'nearest-exact',  'center')[0]
-        return (image, upscale_by, tile_width, tile_height)
+        tile_width, tile_height = find_tile_dimensions(width, height, corrected_upscale_by, tile_resolution)
+        tiles_across = new_width / tile_width
+        tiles_down = new_height / tile_height
+        new_image = self.resize(image, new_width / tiles_across, new_height / tiles_down, 'nearest-exact', 'center')[0]
+        print('Upscaling image by {}x'.format(corrected_upscale_by),
+              'to {}x{}'.format(new_width, new_height),
+              'with tile size {}x{}'.format(tile_width, tile_height))
+        return (new_image, upscale_by, tile_width, tile_height)
 
 """ Deprecated Nodes """
 
