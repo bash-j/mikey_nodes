@@ -146,7 +146,17 @@ def find_and_replace_wildcards(prompt, offset_seed):
         if os.path.isfile(file_path):
             with open(file_path, 'r', encoding='utf-8') as file:
                 wildcard_lines = file.readlines()
-                selected_lines = random.sample(wildcard_lines, min(lines_to_insert, len(wildcard_lines)))
+                if match_str == actual_match:
+                    offset += random.randint(1, 100)
+                if lines_count == 1:
+                    selected_lines = wildcard_lines[offset % len(wildcard_lines)]
+                else:
+                    # select first based on line offset
+                    # then select the rest randomly
+                    # pop lines as you go
+                    selected_lines = wildcard_lines.pop(offset % len(wildcard_lines))
+                    for i in range(1, lines_to_insert):
+                        selected_lines += wildcard_lines.pop(random.randint(0, len(wildcard_lines) - 1))
                 replacement_text = ''.join(selected_lines).strip()
                 prompt = prompt.replace(f"{full_match}__{actual_match}__", replacement_text, 1)
                 match_str = actual_match
@@ -693,7 +703,7 @@ class PromptWithStyleV3:
         return (base_model, {"samples":latent},
                 sdxl_pos_cond, sdxl_neg_cond,
                 refiner_pos_cond, refiner_neg_cond,
-                pos_prompt, neg_prompt)
+                pos_prompt_, neg_prompt_)
 
 class PromptWithSDXL:
     @classmethod
