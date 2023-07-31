@@ -125,12 +125,13 @@ def read_styles():
 def find_and_replace_wildcards(prompt, offset_seed):
     # wildcards use the __file_name__ syntax
     wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
-    wildcard_regex = r'(\{(\d+)\$\$)?__(.*?)__'
+    wildcard_regex = r'(\[(\d+)\$\$)?__([^__]+)__\]?'
     match_str = ''
     offset = offset_seed
-    for full_match, lines_count, actual_match in re.findall(wildcard_regex, prompt):
+    for full_match, lines_count_str, actual_match in re.findall(wildcard_regex, prompt):
         print(f'Wildcard match: {actual_match}')
-        lines_to_insert = int(lines_count) if lines_count else 1
+        lines_to_insert = int(lines_count_str) if lines_count_str else 1
+        print(f'Wildcard lines to insert: {lines_to_insert}')
         match_parts = actual_match.split('/')
         if len(match_parts) > 1:
             wildcard_dir = os.path.join(*match_parts[:-1])
@@ -141,24 +142,22 @@ def find_and_replace_wildcards(prompt, offset_seed):
         search_path = os.path.join(wildcard_path, wildcard_dir)
         file_path = os.path.join(search_path, wildcard_file + '.txt')
         if not os.path.isfile(file_path) and wildcard_dir == '':
-            # If the file was not found and there's no subdirectory, fall back to the wildcard directory
             file_path = os.path.join(wildcard_path, wildcard_file + '.txt')
         if os.path.isfile(file_path):
             with open(file_path, 'r', encoding='utf-8') as file:
-                wildcard_lines = file.readlines()
+                wildcard_lines = [line.strip() for line in file.readlines()]
                 if match_str == actual_match:
-                    offset += random.randint(1, 100)
-                if lines_count == 1:
-                    selected_lines = wildcard_lines[offset % len(wildcard_lines)]
-                else:
-                    # select first based on line offset
-                    # then select the rest randomly
-                    # pop lines as you go
-                    selected_lines = wildcard_lines.pop(offset % len(wildcard_lines))
-                    for i in range(1, lines_to_insert):
-                        selected_lines += wildcard_lines.pop(random.randint(0, len(wildcard_lines) - 1))
-                replacement_text = ','.join(selected_lines).strip()
-                prompt = prompt.replace(f"{full_match}__{actual_match}__", replacement_text, 1)
+                    offset += 1
+                selected_lines = []
+                # start selection from the offset
+                start_idx = offset % len(wildcard_lines)
+                for i in range(lines_to_insert):
+                    # select lines sequentially, looping back to the start if necessary
+                    selected_lines.append(wildcard_lines[(start_idx + i) % len(wildcard_lines)])
+                    offset += 1
+                replacement_text = ','.join(selected_lines)
+                full_match_with_pattern = full_match + f"__{actual_match}__" if full_match else f"__{actual_match}__"
+                prompt = prompt.replace(full_match_with_pattern, replacement_text, 1)
                 match_str = actual_match
                 print('Wildcard prompt selected: ' + replacement_text)
         else:
@@ -652,7 +651,7 @@ class PromptWithStyleV3:
             return (base_model, {"samples":latent},
                     sdxl_pos_cond, sdxl_neg_cond,
                     refiner_pos_cond, refiner_neg_cond,
-                    pos_prompt, neg_prompt)
+                    pos_prompt_, neg_prompt_)
 
         for style_prompt in style_prompts:
             """ get output from PromptWithStyle.start """

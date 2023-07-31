@@ -1,5 +1,5 @@
 {
-  "last_node_id": 52,
+  "last_node_id": 53,
   "last_link_id": 256,
   "nodes": [
     {
@@ -16,7 +16,7 @@
       "flags": {
         "pinned": true
       },
-      "order": 4,
+      "order": 5,
       "mode": 0,
       "inputs": [
         {
@@ -56,7 +56,7 @@
       },
       "widgets_values": [
         "disable",
-        571461792157476,
+        824011940533483,
         "randomize",
         50,
         8.5,
@@ -66,8 +66,8 @@
         50,
         "disable"
       ],
-      "color": "#244235",
-      "bgcolor": "#366350"
+      "color": "#244242",
+      "bgcolor": "#366363"
     },
     {
       "id": 3,
@@ -119,8 +119,8 @@
       "widgets_values": [
         "sd_xl_refiner_1.0_0.9vae.safetensors"
       ],
-      "color": "#2c2442",
-      "bgcolor": "#433663"
+      "color": "#332442",
+      "bgcolor": "#4c3663"
     },
     {
       "id": 17,
@@ -136,7 +136,7 @@
       "flags": {
         "pinned": true
       },
-      "order": 5,
+      "order": 6,
       "mode": 0,
       "inputs": [
         {
@@ -165,8 +165,8 @@
       "properties": {
         "Node name for S&R": "VAEDecode"
       },
-      "color": "#42243e",
-      "bgcolor": "#63365d"
+      "color": "#42243b",
+      "bgcolor": "#633658"
     },
     {
       "id": 4,
@@ -183,7 +183,7 @@
         "pinned": false,
         "collapsed": false
       },
-      "order": 3,
+      "order": 4,
       "mode": 0,
       "inputs": [
         {
@@ -223,7 +223,7 @@
       },
       "widgets_values": [
         "enable",
-        113044101249750,
+        1070759049336278,
         "randomize",
         25,
         6.5,
@@ -233,8 +233,8 @@
         22,
         "enable"
       ],
-      "color": "#2d4224",
-      "bgcolor": "#436336"
+      "color": "#24422b",
+      "bgcolor": "#366341"
     },
     {
       "id": 13,
@@ -251,7 +251,7 @@
         "pinned": false,
         "collapsed": false
       },
-      "order": 6,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
@@ -295,8 +295,8 @@
         "Positive Prompt",
         "Negative Prompt"
       ],
-      "color": "#423e24",
-      "bgcolor": "#635d36"
+      "color": "#334224",
+      "bgcolor": "#4d6336"
     },
     {
       "id": 2,
@@ -350,8 +350,31 @@
       "widgets_values": [
         "sd_xl_base_1.0_0.9vae.safetensors"
       ],
-      "color": "#243642",
-      "bgcolor": "#365063"
+      "color": "#242b42",
+      "bgcolor": "#364163"
+    },
+    {
+      "id": 53,
+      "type": "Note",
+      "pos": [
+        -380,
+        30
+      ],
+      "size": [
+        370,
+        510
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "properties": {
+        "text": ""
+      },
+      "widgets_values": [
+        "This node allows you to prompt with a style and loras. You can add a lora with <lora:lora_name> or <lora:lora_name:0.8> syntax for a weight of 0.8 as an example.\n\nYou can add styles by using the <style:style_name> syntax. You can add more than one style\n\nBuilt in Styles:\nSAI-Enhance, SAI-Anime, SAI-Photographic, SAI-Digital art, SAI-Comic book, SAI-Fantasy art, SAI-Analog film, SAI-Neonpunk, SAI-Isometric, SAI-Lowpoly, SAI-Origami, SAI-Line art, SAI-Craft clay, SAI-Cinematic, SAI-3d-model, SAI-pixel art, SAI-Texture, photographic, deep-field, analog-film, cinematic, red, documentary, nature-photography, editorial, polaroid, 3d-model, low-poly, modeling-compound, diorama, miniatures, abstract, anime, comic-book, digital-art, fantasy-art, dark-fantasy, oil-painting, watercolor, charcoal, color-pencil, crayon, cross-stitch, felt, origami, scrapbook, isometric, line-art, vector-art, neon-punk, pixel-art, tile-texture, lithography, mosaic, woodblock-print, sticker, stained-glass, tattoo, statue, album-art, wes-anderson, vaporwave, clarendon, gingham, juno, lark, nonagon, kaleidoscope, haunting, glam, mecha, padam, collage, paper-mache, macrame, quilling, pottery, batik, felting, marquetry, wildstyle-graffiti, bubble-graffiti, stencil-graffiti, throw-up-graffiti, tag-graffiti"
+      ],
+      "color": "#422424",
+      "bgcolor": "#633636"
     },
     {
       "id": 52,
@@ -365,7 +388,7 @@
         "1": 510
       },
       "flags": {},
-      "order": 2,
+      "order": 3,
       "mode": 0,
       "inputs": [
         {
@@ -464,17 +487,17 @@
       "widgets_values": [
         "Positive Prompt",
         "Negative Prompt",
-        "3:4 [896x1152 portrait]",
+        "1:1 [1024x1024 square]",
         "false",
         "true",
         1024,
         1024,
         1,
-        714769579202766,
+        667379571233081,
         "randomize"
       ],
-      "color": "#422424",
-      "bgcolor": "#633636"
+      "color": "#423b24",
+      "bgcolor": "#635836"
     }
   ],
   "links": [
