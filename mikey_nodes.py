@@ -4,6 +4,7 @@ import importlib.util
 import json
 from math import ceil, pow
 import os
+import random
 import re
 import sys
 
@@ -103,19 +104,48 @@ def read_styles():
             styles.append(style)
     return styles, pos_style, neg_style
 
+#def find_and_replace_wildcards(prompt, offset_seed):
+#    # wildcards use the __file_name__ syntax
+#    wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
+#    wildcard_regex = r'__(.*?)__'
+#    match_str = ''
+#    offset = offset_seed
+#    for match in re.findall(wildcard_regex, prompt):
+#        print(f'Wildcard match: {match}')
+#        if match_str == match:
+#            offset += 1
+#        else:
+#            offset = offset_seed
+#        match_parts = match.split('/')
+#        if len(match_parts) > 1:
+#            wildcard_dir = os.path.join(*match_parts[:-1])
+#            wildcard_file = match_parts[-1]
+#        else:
+#            wildcard_dir = ''
+#            wildcard_file = match_parts[0]
+#        search_path = os.path.join(wildcard_path, wildcard_dir)
+#        is_file = os.path.isfile(os.path.join(search_path, wildcard_file + '.txt'))
+#        if is_file:
+#            with open(os.path.join(search_path, wildcard_file + '.txt'), 'r', encoding='utf-8') as file:
+#                wildcard_lines = file.readlines()
+#                line_number = (offset % len(wildcard_lines))
+#                prompt = prompt.replace(f"__{match}__", wildcard_lines[line_number].strip(), 1)
+#                match_str = match
+#                print('Wildcard prompt selected: ' + wildcard_lines[line_number].strip())
+#        else:
+#            print(f'Wildcard file {wildcard_file}.txt not found in {search_path}')
+#    return prompt
+
 def find_and_replace_wildcards(prompt, offset_seed):
     # wildcards use the __file_name__ syntax
     wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
-    wildcard_regex = r'__(.*?)__'
+    wildcard_regex = r'(\{(\d+)\$\$)?__(.*?)__'
     match_str = ''
     offset = offset_seed
-    for match in re.findall(wildcard_regex, prompt):
-        print(f'Wildcard match: {match}')
-        if match_str == match:
-            offset += 1
-        else:
-            offset = offset_seed
-        match_parts = match.split('/')
+    for full_match, lines_count, actual_match in re.findall(wildcard_regex, prompt):
+        print(f'Wildcard match: {actual_match}')
+        lines_to_insert = int(lines_count) if lines_count else 1
+        match_parts = actual_match.split('/')
         if len(match_parts) > 1:
             wildcard_dir = os.path.join(*match_parts[:-1])
             wildcard_file = match_parts[-1]
@@ -123,14 +153,18 @@ def find_and_replace_wildcards(prompt, offset_seed):
             wildcard_dir = ''
             wildcard_file = match_parts[0]
         search_path = os.path.join(wildcard_path, wildcard_dir)
-        is_file = os.path.isfile(os.path.join(search_path, wildcard_file + '.txt'))
-        if is_file:
-            with open(os.path.join(search_path, wildcard_file + '.txt'), 'r', encoding='utf-8') as file:
+        file_path = os.path.join(search_path, wildcard_file + '.txt')
+        if not os.path.isfile(file_path) and wildcard_dir == '':
+            # If the file was not found and there's no subdirectory, fall back to the wildcard directory
+            file_path = os.path.join(wildcard_path, wildcard_file + '.txt')
+        if os.path.isfile(file_path):
+            with open(file_path, 'r', encoding='utf-8') as file:
                 wildcard_lines = file.readlines()
-                line_number = (offset % len(wildcard_lines))
-                prompt = prompt.replace(f"__{match}__", wildcard_lines[line_number].strip(), 1)
-                match_str = match
-                print('Wildcard prompt selected: ' + wildcard_lines[line_number].strip())
+                selected_lines = random.sample(wildcard_lines, min(lines_to_insert, len(wildcard_lines)))
+                replacement_text = ''.join(selected_lines).strip()
+                prompt = prompt.replace(f"{full_match}__{actual_match}__", replacement_text, 1)
+                match_str = actual_match
+                print('Wildcard prompt selected: ' + replacement_text)
         else:
             print(f'Wildcard file {wildcard_file}.txt not found in {search_path}')
     return prompt
