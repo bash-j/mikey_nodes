@@ -125,10 +125,11 @@ def read_styles():
 def find_and_replace_wildcards(prompt, offset_seed):
     # wildcards use the __file_name__ syntax
     wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
-    wildcard_regex = r'(\[(\d+)\$\$)?__([^__]+)__\]?'
-    match_str = ''
+    wildcard_regex = r'(\[(\d+)\$\$)?(__(?:[^_]+_)*[^_]+__)' #r'(\[(\d+)\$\$)?__([^__]+)__\]?'
+    match_strings = []
     offset = offset_seed
     for full_match, lines_count_str, actual_match in re.findall(wildcard_regex, prompt):
+        actual_match = actual_match[2:-2]
         print(f'Wildcard match: {actual_match}')
         lines_to_insert = int(lines_count_str) if lines_count_str else 1
         print(f'Wildcard lines to insert: {lines_to_insert}')
@@ -144,22 +145,23 @@ def find_and_replace_wildcards(prompt, offset_seed):
         if not os.path.isfile(file_path) and wildcard_dir == '':
             file_path = os.path.join(wildcard_path, wildcard_file + '.txt')
         if os.path.isfile(file_path):
+            if actual_match in match_strings:
+                offset += 1
+            # determine the number of lines in the file
+            lines_count = sum(1 for line in open(file_path, 'r', encoding='utf-8'))
+            start_idx = (offset % lines_count)
+            selected_lines = []
             with open(file_path, 'r', encoding='utf-8') as file:
-                wildcard_lines = [line.strip() for line in file.readlines()]
-                if match_str == actual_match:
-                    offset += 1
-                selected_lines = []
-                # start selection from the offset
-                start_idx = offset % len(wildcard_lines)
-                for i in range(lines_to_insert):
-                    # select lines sequentially, looping back to the start if necessary
-                    selected_lines.append(wildcard_lines[(start_idx + i) % len(wildcard_lines)])
-                    offset += 1
-                replacement_text = ','.join(selected_lines)
-                full_match_with_pattern = full_match + f"__{actual_match}__" if full_match else f"__{actual_match}__"
-                prompt = prompt.replace(full_match_with_pattern, replacement_text, 1)
-                match_str = actual_match
-                print('Wildcard prompt selected: ' + replacement_text)
+                for i, line in enumerate(file):
+                    if (start_idx + i) % lines_count < lines_to_insert:
+                        selected_lines.append(line.strip())
+                    if len(selected_lines) == lines_to_insert:
+                        break
+            replacement_text = ','.join(selected_lines)
+            full_match_with_pattern = full_match + f"__{actual_match}__" if full_match else f"__{actual_match}__"
+            prompt = prompt.replace(full_match_with_pattern, replacement_text, 1)
+            match_strings.append(actual_match)
+            print('Wildcard prompt selected: ' + replacement_text)
         else:
             print(f'Wildcard file {wildcard_file}.txt not found in {search_path}')
     return prompt
@@ -577,6 +579,7 @@ class PromptWithStyleV3:
                     lora_filename += '.safetensors'
                 # get the lora multiplier
                 lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
+                print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
                 # apply the lora to the clip using the LoraLoader.load_lora function
                 # def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
                 # ...
@@ -659,8 +662,15 @@ class PromptWithStyleV3:
             style_ = style_prompt
             print(style_ in self.styles)
             if style_ not in self.styles:
-                style_ = 'none'
-                continue
+                # try to match a key without being case sensitive
+                style_search = next((x for x in self.styles if x.lower() == style_.lower()), None)
+                # if there are still no matches
+                if style_search is None:
+                    print(f'Could not find style: {style_}')
+                    style_ = 'none'
+                    continue
+                else:
+                    style_ = style_search
             pos_prompt_ = re.sub(style_re, '', pos_prompt)
             neg_prompt_ = re.sub(style_re, '', neg_prompt)
             pos_prompt_, neg_prompt_ = self.parse_prompts(pos_prompt_, neg_prompt_, style_, seed)
@@ -672,7 +682,20 @@ class PromptWithStyleV3:
             base_neg_conds.append(CLIPTextEncodeSDXL.encode(self, clip_base_neg, width_, height_, 0, 0, width_, height_, neg_prompt_, neg_style_)[0])
             refiner_pos_conds.append(CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width_, refiner_height_, pos_prompt_)[0])
             refiner_neg_conds.append(CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width_, refiner_height_, neg_prompt_)[0])
-
+        # if none of the styles matched we will get an empty list so we need to check for that again
+        if len(base_pos_conds) == 0:
+            style_ = 'none'
+            pos_prompt_, neg_prompt_ = self.parse_prompts(positive_prompt, negative_prompt, style_, seed)
+            pos_style_, neg_style_ = pos_prompt_, neg_prompt_
+            # encode text
+            sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base_pos, width, height, 0, 0, width, height, pos_prompt, pos_style_)[0]
+            sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base_neg, width, height, 0, 0, width, height, neg_prompt, neg_style_)[0]
+            refiner_pos_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width, refiner_height, pos_prompt)[0]
+            refiner_neg_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width, refiner_height, neg_prompt)[0]
+            return (base_model, {"samples":latent},
+                    sdxl_pos_cond, sdxl_neg_cond,
+                    refiner_pos_cond, refiner_neg_cond,
+                    pos_prompt_, neg_prompt_)
         # loop through conds and add them together
         sdxl_pos_cond = base_pos_conds[0]
         weight = 1
