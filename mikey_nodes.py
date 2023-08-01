@@ -48,23 +48,13 @@ def find_latent_size(width: int, height: int, res: int = 1024) -> (int, int):
     return best_w, best_h
 
 def find_tile_dimensions(width: int, height: int, multiplier: float, res: int) -> (int, int):
-    # Convert the multiplier to a fraction
-    multiplier_fraction = Fraction(multiplier).limit_denominator()
-
-    total_width = width * multiplier_fraction.numerator // multiplier_fraction.denominator
-    total_height = height * multiplier_fraction.numerator // multiplier_fraction.denominator
-
-    target_area = res * res
-
-    step = 8  # Fixed step size of 8 to ensure both dimensions are multiples of 8
-    maximum = res * 2
-    for h in range(step, maximum + 1, step):
-        w = target_area // h
-        # Checking that both w and h are multiples of 8, and that the dimensions meet the criteria
-        if w * h == target_area and w <= total_width and h <= total_height and w < maximum and h < maximum:
-            return w, h
-
-    return None, None
+    new_width = width * multiplier // 8 * 8
+    new_height = height * multiplier // 8 * 8
+    width_multiples = round(new_width / res, 0)
+    height_multiples = round(new_height / res, 0)
+    tile_width = new_width / width_multiples // 1
+    tile_height = new_height / height_multiples // 1
+    return tile_width, tile_height
 
 def read_ratios():
     p = os.path.dirname(os.path.realpath(__file__))
@@ -769,11 +759,11 @@ class UpscaleTileCalculator:
     @classmethod
     def INPUT_TYPES(s):
         return {'required': {'image': ('IMAGE',),
-                             'upscale_by': ('FLOAT', {'default': 1.0, 'min': 0.1, 'max': 10.0, 'step': 0.1}),
+                            # 'upscale_by': ('FLOAT', {'default': 1.0, 'min': 0.1, 'max': 10.0, 'step': 0.1}),
                              'tile_resolution': ('INT', {'default': 512, 'min': 1, 'max': 8192, 'step': 8})}}
 
-    RETURN_TYPES = ('IMAGE', 'FLOAT', 'INT', 'INT')
-    RETURN_NAMES = ('image', 'upscale_by', 'tile_width', 'tile_height')
+    RETURN_TYPES = ('IMAGE', 'INT', 'INT')
+    RETURN_NAMES = ('image', 'tile_width', 'tile_height')
     FUNCTION = 'calculate'
     CATEGORY = 'Mikey/Image'
 
@@ -789,21 +779,11 @@ class UpscaleTileCalculator:
         img = self.upscale(image, upscale_method, w, h, crop)[0]
         return (img, )
 
-    def calculate(self, image, upscale_by, tile_resolution):
-        # get width and height from the image
+    def calculate(self, image, tile_resolution):
         width, height = image.shape[2], image.shape[1]
-        new_image = self.resize(image, width * upscale_by, height * upscale_by, 'nearest-exact', 'center')[0]
-        new_width, new_height = new_image.shape[2], new_image.shape[1]
-        corrected_upscale_by = (new_width * new_height) / (width * height)
-        # tile_resolution using the find_tile_dimensions function
-        tile_width, tile_height = find_tile_dimensions(width, height, corrected_upscale_by, tile_resolution)
-        tiles_across = new_width / tile_width
-        tiles_down = new_height / tile_height
-        new_image = self.resize(image, new_width / tiles_across, new_height / tiles_down, 'nearest-exact', 'center')[0]
-        print('Upscaling image by {}x'.format(corrected_upscale_by),
-              'to {}x{}'.format(new_width, new_height),
-              'with tile size {}x{}'.format(tile_width, tile_height))
-        return (new_image, upscale_by, tile_width, tile_height)
+        tile_width, tile_height = find_tile_dimensions(width, height, 1.0, tile_resolution)
+        print('Tile width: ' + str(tile_width), 'Tile height: ' + str(tile_height))
+        return (image, tile_width, tile_height)
 
 """ Deprecated Nodes """
 
