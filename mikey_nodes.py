@@ -771,6 +771,40 @@ class PromptWithStyleV3:
                 refiner_pos_cond, refiner_neg_cond,
                 pos_prompt_, neg_prompt_)
 
+class StyleConditioner:
+    @classmethod
+    def INPUT_TYPES(s):
+        s.styles, s.pos_style, s.neg_style = read_styles()
+        return {"required": {"style": (s.styles,),
+                             "positive_cond_base": ("CONDITIONING",), "negative_cond_base": ("CONDITIONING",),
+                             "positive_cond_refiner": ("CONDITIONING",), "negative_cond_refiner": ("CONDITIONING",),
+                             "base_clip": ("CLIP",), "refiner_clip": ("CLIP",),
+                             }
+        }
+
+    RETURN_TYPES = ('CONDITIONING','CONDITIONING','CONDITIONING','CONDITIONING',)
+    RETURN_NAMES = ('base_pos_cond','base_neg_cond','refiner_pos_cond','refiner_neg_cond',)
+    FUNCTION = 'add_style'
+    CATEGORY = 'Mikey/Conditioning'
+
+    def add_style(self, style, positive_cond_base, negative_cond_base, positive_cond_refiner, negative_cond_refiner, base_clip, refiner_clip):
+        pos_prompt = self.pos_style[style]
+        neg_prompt = self.neg_style[style]
+        pos_prompt = pos_prompt.replace('{prompt}', '')
+        neg_prompt = neg_prompt.replace('{prompt}', '')
+        # encode the style prompt
+        positive_cond_base = CLIPTextEncodeSDXL.encode(self, base_clip, 1024, 1024, 0, 0, 1024, 1024, pos_prompt, pos_prompt)[0]
+        negative_cond_base = CLIPTextEncodeSDXL.encode(self, base_clip, 1024, 1024, 0, 0, 1024, 1024, neg_prompt, neg_prompt)[0]
+        positive_cond_refiner = CLIPTextEncodeSDXLRefiner.encode(self, refiner_clip, 6, 4096, 4096, pos_prompt)[0]
+        negative_cond_refiner = CLIPTextEncodeSDXLRefiner.encode(self, refiner_clip, 2.5, 4096, 4096, neg_prompt)[0]
+        # average the style prompt with the existing conditioning
+        positive_cond_base = ConditioningAverage.addWeighted(self, positive_cond_base, positive_cond_base, 0.5)[0]
+        negative_cond_base = ConditioningAverage.addWeighted(self, negative_cond_base, negative_cond_base, 0.5)[0]
+        positive_cond_refiner = ConditioningAverage.addWeighted(self, positive_cond_refiner, positive_cond_refiner, 0.5)[0]
+        negative_cond_refiner = ConditioningAverage.addWeighted(self, negative_cond_refiner, negative_cond_refiner, 0.5)[0]
+
+        return (positive_cond_base, negative_cond_base, positive_cond_refiner, negative_cond_refiner,)
+
 class PromptWithSDXL:
     @classmethod
     def INPUT_TYPES(s):
@@ -867,6 +901,7 @@ NODE_CLASS_MAPPINGS = {
     'Prompt With Style V2': PromptWithStyleV2,
     'Prompt With SDXL': PromptWithSDXL,
     'Prompt With Style V3': PromptWithStyleV3,
+    'Style Conditioner': StyleConditioner,
     'HaldCLUT': HaldCLUT,
     'VAE Decode 6GB SDXL (deprecated)': VAEDecode6GB,
 }
