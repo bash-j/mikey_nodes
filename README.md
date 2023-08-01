@@ -13,7 +13,7 @@ You can add styles by using the `<style:style_name>` syntax.
 Some of the styles built in are:
 `SAI-Enhance, SAI-Anime, SAI-Photographic, SAI-Digital art, SAI-Comic book, SAI-Fantasy art, SAI-Analog film, SAI-Neonpunk, SAI-Isometric, SAI-Lowpoly, SAI-Origami, SAI-Line art, SAI-Craft clay, SAI-Cinematic, SAI-3d-model, SAI-pixel art, SAI-Texture, photographic, deep-field, analog-film, cinematic, red, documentary, nature-photography, editorial, polaroid, 3d-model, low-poly, modeling-compound, diorama, miniatures, abstract, anime, comic-book, digital-art, fantasy-art, dark-fantasy, oil-painting, watercolor, charcoal, color-pencil, crayon, cross-stitch, felt, origami, scrapbook, isometric, line-art, vector-art, neon-punk, pixel-art, tile-texture, lithography, mosaic, woodblock-print, sticker, stained-glass, tattoo, statue, album-art, wes-anderson, vaporwave, clarendon, gingham, juno, lark, nonagon, kaleidoscope, haunting, glam, mecha, padam, collage, paper-mache, macrame, quilling, pottery, batik, felting, marquetry, wildstyle-graffiti, bubble-graffiti, stencil-graffiti, throw-up-graffiti, tag-graffiti`
 
-Wildcards are supported using the `__word__` syntax. Folder location is comfyui/wildcards You can select more than 1 line from the wildcard by using the syntax `[2$$__wildcard__]` for 2 lines in this example.
+Wildcards are supported using the `__word__` syntax. Folder location is comfyui/wildcards You can select more than 1 line from the wildcard by using the syntax `[2$$__wildcard__]` for 2 lines in this example. You can also add a word to search for in the wildcard file e.g. `__wildcard|word__`
 
 There are outputs for image size and prompts for the clip conditioners.
 
@@ -58,6 +58,10 @@ This node allows you to enter your own aspect ratio or image size from wherever,
 
 This node allows you to resize an image to fit into 1024x1024 resolution. Good for Img2Img workflows.
 
+## Batch Resize Image for SDXL
+
+Given a path to a folder containing images, it will resize all images in the folder to fit the 1024^2 resolution and feed into the workflow. Careful of folders with lots of images!
+
 ## Save Image With Prompt Data
 
 This node allows you to save an image with the prompt data in the filename.
@@ -65,6 +69,14 @@ This node allows you to save an image with the prompt data in the filename.
 The filename will start with a datestamp, then part of the positive prompt.
 
 It will also save the positive prompt and negative prompt to the png data.
+
+## HaldCLUT
+
+This will apply a HaldCLUT to an image to change the colors, which tend to imitate the look of the film or filter. I have included some in this package, but you can find more png files at [rawtherapee.com](http://rawtherapee.com/shared/HaldCLUT.zip)
+
+## Upscale Tile Calculator
+
+This node will calculate tile sizes that hopefully fit perfectly into the upscaled image close the resolution entered.
 
 ## VAE Decode 6GB (deprecated)
 
