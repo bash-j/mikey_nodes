@@ -156,6 +156,60 @@ def find_and_replace_wildcards(prompt, offset_seed):
             print(f'Wildcard file {wildcard_file}.txt not found in {search_path}')
     return prompt
 
+def find_and_replace_wildcards(prompt, offset_seed):
+    # wildcards use the __file_name__ syntax with optional |word_to_find
+    wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
+    wildcard_regex = r'((\[(\d+)\$\$)?__([^|]+)((?:\|[^__]+)*)__\]?)'
+    match_strings = []
+    offset = offset_seed
+    for full_match, _, lines_count_str, actual_match, words_to_find_str in re.findall(wildcard_regex, prompt):
+        words_to_find = words_to_find_str.split('|')[1:] if words_to_find_str else None
+        print(f'Wildcard match: {actual_match}')
+        print(f'Wildcard words to find: {words_to_find}')
+        lines_to_insert = int(lines_count_str) if lines_count_str else 1
+        print(f'Wildcard lines to insert: {lines_to_insert}')
+        match_parts = actual_match.split('/')
+        if len(match_parts) > 1:
+            wildcard_dir = os.path.join(*match_parts[:-1])
+            wildcard_file = match_parts[-1]
+        else:
+            wildcard_dir = ''
+            wildcard_file = match_parts[0]
+        search_path = os.path.join(wildcard_path, wildcard_dir)
+        file_path = os.path.join(search_path, wildcard_file + '.txt')
+        if not os.path.isfile(file_path) and wildcard_dir == '':
+            file_path = os.path.join(wildcard_path, wildcard_file + '.txt')
+        if os.path.isfile(file_path):
+            if actual_match in match_strings:
+                offset += 1
+            selected_lines = []
+            with open(file_path, 'r', encoding='utf-8') as file:
+                file_lines = file.readlines()
+                num_lines = len(file_lines)
+                if words_to_find:
+                    for i in range(lines_to_insert):
+                        start_idx = (offset + i) % num_lines
+                        for j in range(num_lines):
+                            line_number = (start_idx + j) % num_lines
+                            line = file_lines[line_number].strip()
+                            if any(re.search(r'\b' + re.escape(word) + r'\b', line) for word in words_to_find):
+                                selected_lines.append(line)
+                                break
+                else:
+                    start_idx = offset % num_lines
+                    for i in range(lines_to_insert):
+                        line_number = (start_idx + i) % num_lines
+                        line = file_lines[line_number].strip()
+                        selected_lines.append(line)
+            replacement_text = ','.join(selected_lines)
+            prompt = prompt.replace(full_match, replacement_text, 1)
+            match_strings.append(actual_match)
+            offset += lines_to_insert
+            print('Wildcard prompt selected: ' + replacement_text)
+        else:
+            print(f'Wildcard file {wildcard_file}.txt not found in {search_path}')
+    return prompt
+
 def read_cluts():
     p = os.path.dirname(os.path.realpath(__file__))
     halddir = os.path.join(p, 'HaldCLUT')
