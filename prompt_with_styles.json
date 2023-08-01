@@ -56,13 +56,13 @@
       },
       "widgets_values": [
         "disable",
-        824011940533483,
+        815696134604522,
         "randomize",
         50,
-        8.5,
+        10,
         "dpmpp_2m",
         "simple",
-        44,
+        35,
         50,
         "disable"
       ],
@@ -167,74 +167,6 @@
       },
       "color": "#42243b",
       "bgcolor": "#633658"
-    },
-    {
-      "id": 4,
-      "type": "KSamplerAdvanced",
-      "pos": [
-        1280,
-        30
-      ],
-      "size": {
-        "0": 315,
-        "1": 334
-      },
-      "flags": {
-        "pinned": false,
-        "collapsed": false
-      },
-      "order": 4,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model",
-          "type": "MODEL",
-          "link": 232
-        },
-        {
-          "name": "positive",
-          "type": "CONDITIONING",
-          "link": 234
-        },
-        {
-          "name": "negative",
-          "type": "CONDITIONING",
-          "link": 235
-        },
-        {
-          "name": "latent_image",
-          "type": "LATENT",
-          "link": 233
-        }
-      ],
-      "outputs": [
-        {
-          "name": "LATENT",
-          "type": "LATENT",
-          "links": [
-            157
-          ],
-          "shape": 3,
-          "slot_index": 0
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "KSamplerAdvanced"
-      },
-      "widgets_values": [
-        "enable",
-        1070759049336278,
-        "randomize",
-        25,
-        6.5,
-        "dpmpp_2s_ancestral",
-        "simple",
-        0,
-        22,
-        "enable"
-      ],
-      "color": "#24422b",
-      "bgcolor": "#366341"
     },
     {
       "id": 13,
@@ -354,29 +286,6 @@
       "bgcolor": "#364163"
     },
     {
-      "id": 53,
-      "type": "Note",
-      "pos": [
-        -380,
-        30
-      ],
-      "size": [
-        370,
-        510
-      ],
-      "flags": {},
-      "order": 2,
-      "mode": 0,
-      "properties": {
-        "text": ""
-      },
-      "widgets_values": [
-        "This node allows you to prompt with a style and loras. You can add a lora with <lora:lora_name> or <lora:lora_name:0.8> syntax for a weight of 0.8 as an example.\n\nYou can add styles by using the <style:style_name> syntax. You can add more than one style\n\nBuilt in Styles:\nSAI-Enhance, SAI-Anime, SAI-Photographic, SAI-Digital art, SAI-Comic book, SAI-Fantasy art, SAI-Analog film, SAI-Neonpunk, SAI-Isometric, SAI-Lowpoly, SAI-Origami, SAI-Line art, SAI-Craft clay, SAI-Cinematic, SAI-3d-model, SAI-pixel art, SAI-Texture, photographic, deep-field, analog-film, cinematic, red, documentary, nature-photography, editorial, polaroid, 3d-model, low-poly, modeling-compound, diorama, miniatures, abstract, anime, comic-book, digital-art, fantasy-art, dark-fantasy, oil-painting, watercolor, charcoal, color-pencil, crayon, cross-stitch, felt, origami, scrapbook, isometric, line-art, vector-art, neon-punk, pixel-art, tile-texture, lithography, mosaic, woodblock-print, sticker, stained-glass, tattoo, statue, album-art, wes-anderson, vaporwave, clarendon, gingham, juno, lark, nonagon, kaleidoscope, haunting, glam, mecha, padam, collage, paper-mache, macrame, quilling, pottery, batik, felting, marquetry, wildstyle-graffiti, bubble-graffiti, stencil-graffiti, throw-up-graffiti, tag-graffiti"
-      ],
-      "color": "#422424",
-      "bgcolor": "#633636"
-    },
-    {
       "id": 52,
       "type": "Prompt With Style V3",
       "pos": [
@@ -485,19 +394,110 @@
         "Node name for S&R": "Prompt With Style V3"
       },
       "widgets_values": [
-        "Positive Prompt",
-        "Negative Prompt",
+        "Cyboogie, cyborg figure, retro-futuristic environment, bold, metallic colors <style:wes-anderson> <style:glam>",
+        "",
         "1:1 [1024x1024 square]",
         "false",
         "true",
         1024,
         1024,
         1,
-        667379571233081,
+        923048378923463,
         "randomize"
       ],
       "color": "#423b24",
       "bgcolor": "#635836"
+    },
+    {
+      "id": 4,
+      "type": "KSamplerAdvanced",
+      "pos": [
+        1280,
+        30
+      ],
+      "size": {
+        "0": 315,
+        "1": 334
+      },
+      "flags": {
+        "pinned": false,
+        "collapsed": false
+      },
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 232
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 234
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 235
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 233
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            157
+          ],
+          "shape": 3,
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "KSamplerAdvanced"
+      },
+      "widgets_values": [
+        "enable",
+        363432419537643,
+        "randomize",
+        20,
+        7,
+        "dpmpp_2s_ancestral",
+        "simple",
+        0,
+        14,
+        "enable"
+      ],
+      "color": "#24422b",
+      "bgcolor": "#366341"
+    },
+    {
+      "id": 53,
+      "type": "Note",
+      "pos": [
+        -500,
+        30
+      ],
+      "size": [
+        490,
+        510
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "properties": {
+        "text": ""
+      },
+      "widgets_values": [
+        "This node allows you to prompt with a style and loras. You can add a lora with <lora:lora_name> or <lora:lora_name:0.8> syntax for a weight of 0.8 as an example.\n\nYou can add styles by using the <style:style_name> syntax. You can add more than one style\n\nBuilt in styles:\n\nDigital Art: 3d-model, SAI-3d-model, SAI-Digital art, SAI-Enhance, SAI-Fantasy art, SAI-Isometric, SAI-Line art, SAI-Lowpoly, SAI-Neonpunk,  SAI-pixel art, SAI-Texture, digital-art, isometric, low-poly, neon-punk, pixel-art, sticker, vector-art\n\nCartoons and Anime: anime, SAI-Anime, SAI-Comic book, comic-book\n\nTraditional Art Forms: abstract, batik, charcoal, color-pencil, crayon, fantasy-art, lithography, mosaic, oil-painting, statue, tattoo, watercolor, woodblock-print\n\nPhotography: analog-film, cinematic, deep-field, documentary, nature-photography, photographic, polaroid, red, SAI-Photographic, SAI-Analog film, SAI-Cinematic\n\nGraffiti: bubble-graffiti, stencil-graffiti, tag-graffiti, throw-up-graffiti, wildstyle-graffiti\n\nCrafting: collage, craft-clay, SAI-Craft clay, cross-stitch, diorama, felting, felt, macrame, marquetry, miniatures, modeling-compound, SAI-Origami, origami, paper-mache, pottery, quilling, scrapbook, stained-glass\n\nLooks and Filters: album-art, clarendon, dark-fantasy, glam, gingham, haunting, juno, kaleidoscope, lark, mecha, nonagon, padam, vaporwave, wes-anderson\n"
+      ],
+      "color": "#422424",
+      "bgcolor": "#633636"
     }
   ],
   "links": [
