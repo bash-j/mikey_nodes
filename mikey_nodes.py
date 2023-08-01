@@ -192,7 +192,7 @@ def find_and_replace_wildcards(prompt, offset_seed):
                         for j in range(num_lines):
                             line_number = (start_idx + j) % num_lines
                             line = file_lines[line_number].strip()
-                            if any(re.search(r'\b' + re.escape(word) + r'\b', line) for word in words_to_find):
+                            if any(re.search(r'\b' + re.escape(word) + r'\b', line, re.IGNORECASE) for word in words_to_find):
                                 selected_lines.append(line)
                                 break
                 else:
