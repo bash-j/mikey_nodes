@@ -668,8 +668,14 @@ class PromptWithStyleV3:
 
         latent = torch.zeros([batch_size, 4, height // 8, width // 8])
         print(batch_size, 4, height // 8, width // 8)
-        refiner_width = width * 4
-        refiner_height = height * 4
+        #target_width = width * 4
+        #target_height = height * 4
+        target_width, target_height = find_latent_size(width, height, res=4096)
+        refiner_width = target_width
+        refiner_height = target_height
+        print('Width:', width, 'Height:', height,
+              'Target Width:', target_width, 'Target Height:', target_height,
+              'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
 
         # extract and load loras
         base_model, clip_base_pos, pos_prompt = self.extract_and_load_loras(positive_prompt, base_model, clip_base)
@@ -691,8 +697,8 @@ class PromptWithStyleV3:
             pos_prompt_, neg_prompt_ = self.parse_prompts(positive_prompt, negative_prompt, style_, seed)
             pos_style_, neg_style_ = pos_prompt_, neg_prompt_
             # encode text
-            sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base_pos, width, height, 0, 0, width, height, pos_prompt, pos_style_)[0]
-            sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base_neg, width, height, 0, 0, width, height, neg_prompt, neg_style_)[0]
+            sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base_pos, width, height, 0, 0, target_width, target_height, pos_prompt, pos_style_)[0]
+            sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base_neg, width, height, 0, 0, target_width, target_height, neg_prompt, neg_style_)[0]
             refiner_pos_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width, refiner_height, pos_prompt)[0]
             refiner_neg_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width, refiner_height, neg_prompt)[0]
             return (base_model, {"samples":latent},
@@ -722,8 +728,8 @@ class PromptWithStyleV3:
             width_, height_ = width, height
             refiner_width_, refiner_height_ = refiner_width, refiner_height
             # encode text
-            base_pos_conds.append(CLIPTextEncodeSDXL.encode(self, clip_base_pos, width_, height_, 0, 0, width_, height_, pos_prompt_, pos_style_)[0])
-            base_neg_conds.append(CLIPTextEncodeSDXL.encode(self, clip_base_neg, width_, height_, 0, 0, width_, height_, neg_prompt_, neg_style_)[0])
+            base_pos_conds.append(CLIPTextEncodeSDXL.encode(self, clip_base_pos, width_, height_, 0, 0, target_width, target_height, pos_prompt_, pos_style_)[0])
+            base_neg_conds.append(CLIPTextEncodeSDXL.encode(self, clip_base_neg, width_, height_, 0, 0, target_width, target_height, neg_prompt_, neg_style_)[0])
             refiner_pos_conds.append(CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width_, refiner_height_, pos_prompt_)[0])
             refiner_neg_conds.append(CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width_, refiner_height_, neg_prompt_)[0])
         # if none of the styles matched we will get an empty list so we need to check for that again
@@ -732,8 +738,8 @@ class PromptWithStyleV3:
             pos_prompt_, neg_prompt_ = self.parse_prompts(positive_prompt, negative_prompt, style_, seed)
             pos_style_, neg_style_ = pos_prompt_, neg_prompt_
             # encode text
-            sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base_pos, width, height, 0, 0, width, height, pos_prompt, pos_style_)[0]
-            sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base_neg, width, height, 0, 0, width, height, neg_prompt, neg_style_)[0]
+            sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base_pos, width, height, 0, 0, target_width, target_height, pos_prompt, pos_style_)[0]
+            sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base_neg, width, height, 0, 0, target_width, target_height, neg_prompt, neg_style_)[0]
             refiner_pos_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width, refiner_height, pos_prompt)[0]
             refiner_neg_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width, refiner_height, neg_prompt)[0]
             return (base_model, {"samples":latent},
@@ -775,7 +781,7 @@ class StyleConditioner:
     @classmethod
     def INPUT_TYPES(s):
         s.styles, s.pos_style, s.neg_style = read_styles()
-        return {"required": {"style": (s.styles,),
+        return {"required": {"style": (s.styles,),"strength": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.1}),
                              "positive_cond_base": ("CONDITIONING",), "negative_cond_base": ("CONDITIONING",),
                              "positive_cond_refiner": ("CONDITIONING",), "negative_cond_refiner": ("CONDITIONING",),
                              "base_clip": ("CLIP",), "refiner_clip": ("CLIP",),
@@ -787,21 +793,21 @@ class StyleConditioner:
     FUNCTION = 'add_style'
     CATEGORY = 'Mikey/Conditioning'
 
-    def add_style(self, style, positive_cond_base, negative_cond_base, positive_cond_refiner, negative_cond_refiner, base_clip, refiner_clip):
+    def add_style(self, style, strength, positive_cond_base, negative_cond_base, positive_cond_refiner, negative_cond_refiner, base_clip, refiner_clip):
         pos_prompt = self.pos_style[style]
         neg_prompt = self.neg_style[style]
         pos_prompt = pos_prompt.replace('{prompt}', '')
         neg_prompt = neg_prompt.replace('{prompt}', '')
         # encode the style prompt
-        positive_cond_base = CLIPTextEncodeSDXL.encode(self, base_clip, 1024, 1024, 0, 0, 1024, 1024, pos_prompt, pos_prompt)[0]
-        negative_cond_base = CLIPTextEncodeSDXL.encode(self, base_clip, 1024, 1024, 0, 0, 1024, 1024, neg_prompt, neg_prompt)[0]
-        positive_cond_refiner = CLIPTextEncodeSDXLRefiner.encode(self, refiner_clip, 6, 4096, 4096, pos_prompt)[0]
-        negative_cond_refiner = CLIPTextEncodeSDXLRefiner.encode(self, refiner_clip, 2.5, 4096, 4096, neg_prompt)[0]
+        positive_cond_base_new = CLIPTextEncodeSDXL.encode(self, base_clip, 1024, 1024, 0, 0, 1024, 1024, pos_prompt, pos_prompt)[0]
+        negative_cond_base_new = CLIPTextEncodeSDXL.encode(self, base_clip, 1024, 1024, 0, 0, 1024, 1024, neg_prompt, neg_prompt)[0]
+        positive_cond_refiner_new = CLIPTextEncodeSDXLRefiner.encode(self, refiner_clip, 6, 4096, 4096, pos_prompt)[0]
+        negative_cond_refiner_new = CLIPTextEncodeSDXLRefiner.encode(self, refiner_clip, 2.5, 4096, 4096, neg_prompt)[0]
         # average the style prompt with the existing conditioning
-        positive_cond_base = ConditioningAverage.addWeighted(self, positive_cond_base, positive_cond_base, 0.5)[0]
-        negative_cond_base = ConditioningAverage.addWeighted(self, negative_cond_base, negative_cond_base, 0.5)[0]
-        positive_cond_refiner = ConditioningAverage.addWeighted(self, positive_cond_refiner, positive_cond_refiner, 0.5)[0]
-        negative_cond_refiner = ConditioningAverage.addWeighted(self, negative_cond_refiner, negative_cond_refiner, 0.5)[0]
+        positive_cond_base = ConditioningAverage.addWeighted(self, positive_cond_base_new, positive_cond_base, strength)[0]
+        negative_cond_base = ConditioningAverage.addWeighted(self, negative_cond_base_new, negative_cond_base, strength)[0]
+        positive_cond_refiner = ConditioningAverage.addWeighted(self, positive_cond_refiner_new, positive_cond_refiner, strength)[0]
+        negative_cond_refiner = ConditioningAverage.addWeighted(self, negative_cond_refiner_new, negative_cond_refiner, strength)[0]
 
         return (positive_cond_base, negative_cond_base, positive_cond_refiner, negative_cond_refiner,)
 
