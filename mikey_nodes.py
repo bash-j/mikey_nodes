@@ -210,6 +210,37 @@ def find_and_replace_wildcards(prompt, offset_seed):
             print(f'Wildcard file {wildcard_file}.txt not found in {search_path}')
     return prompt
 
+def extract_and_load_loras(text, model, clip):
+    # load loras detected in the prompt text
+    # The text for adding LoRA to the prompt, <lora:filename:multiplier>, is only used to enable LoRA, and is erased from prompt afterwards
+    # The multiplier is optional, and defaults to 1.0
+    # We update the model and clip, and return the new model and clip with the lora prompt stripped from the text
+    # If multiple lora prompts are detected we chain them together like: original clip > clip_with_lora1 > clip_with_lora2 > clip_with_lora3 > etc
+    lora_re = r'<lora:(.*?)(?::(.*?))?>'
+    # find all lora prompts
+    lora_prompts = re.findall(lora_re, text)
+    stripped_text = text
+    # if we found any lora prompts
+    if len(lora_prompts) > 0:
+        # loop through each lora prompt
+        for lora_prompt in lora_prompts:
+            # get the lora filename
+            lora_filename = lora_prompt[0]
+            # check for file extension in filename
+            if '.safetensors' not in lora_filename:
+                lora_filename += '.safetensors'
+            # get the lora multiplier
+            lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
+            print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
+            # apply the lora to the clip using the LoraLoader.load_lora function
+            # def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
+            # ...
+            # return (model_lora, clip_lora)
+            # apply the lora to the clip
+            model, clip_lora = LoraLoader.load_lora(model, clip, lora_filename, lora_multiplier, lora_multiplier)
+            stripped_text = stripped_text.replace(f'<lora:{lora_filename}:{lora_multiplier}>', '')
+    return model, clip, stripped_text
+
 def read_cluts():
     p = os.path.dirname(os.path.realpath(__file__))
     halddir = os.path.join(p, 'HaldCLUT')
@@ -676,7 +707,13 @@ class PromptWithStyleV3:
         print('Width:', width, 'Height:', height,
               'Target Width:', target_width, 'Target Height:', target_height,
               'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
-
+        # first process wildcards
+        positive_prompt_ = find_and_replace_wildcards(positive_prompt, seed)
+        negative_prompt_ = find_and_replace_wildcards(negative_prompt, seed)
+        if len(positive_prompt_) != len(positive_prompt) or len(negative_prompt_) != len(negative_prompt):
+            seed += random.randint(0, 1000000)
+        positive_prompt = positive_prompt_
+        negative_prompt = negative_prompt_
         # extract and load loras
         base_model, clip_base_pos, pos_prompt = self.extract_and_load_loras(positive_prompt, base_model, clip_base)
         base_model, clip_base_neg, neg_prompt = self.extract_and_load_loras(negative_prompt, base_model, clip_base)
@@ -725,6 +762,8 @@ class PromptWithStyleV3:
             neg_prompt_ = re.sub(style_re, '', neg_prompt)
             pos_prompt_, neg_prompt_ = self.parse_prompts(pos_prompt_, neg_prompt_, style_, seed)
             pos_style_, neg_style_ = str(self.pos_style[style_]), str(self.neg_style[style_])
+            base_model, clip_base_pos, pos_prompt_ = self.extract_and_load_loras(pos_prompt_, base_model, clip_base)
+            base_model, clip_base_neg, neg_prompt_ = self.extract_and_load_loras(neg_prompt_, base_model, clip_base)
             width_, height_ = width, height
             refiner_width_, refiner_height_ = refiner_width, refiner_height
             # encode text
