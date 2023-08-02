@@ -340,7 +340,7 @@ class ResizeImageSDXL:
                 "optional": { "mask": ("MASK", )}}
 
     RETURN_TYPES = ('IMAGE',)
-    FUNCTION = 'upscale'
+    FUNCTION = 'resize'
     CATEGORY = 'Mikey/Image'
 
     def upscale(self, image, upscale_method, width, height, crop):
