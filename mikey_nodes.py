@@ -999,9 +999,25 @@ NODE_CLASS_MAPPINGS = {
     'Batch Resize Image for SDXL': BatchResizeImageSDXL,
     'Prompt With Style': PromptWithStyle,
     'Prompt With Style V2': PromptWithStyleV2,
-    'Prompt With SDXL': PromptWithSDXL,
     'Prompt With Style V3': PromptWithStyleV3,
+    'Prompt With SDXL': PromptWithSDXL,
     'Style Conditioner': StyleConditioner,
-    'HaldCLUT': HaldCLUT,
+    'HaldCLUT ': HaldCLUT,
     'VAE Decode 6GB SDXL (deprecated)': VAEDecode6GB,
+}
+
+NODE_DISPLAY_NAME_MAPPINGS = {
+    'Empty Latent Ratio Select SDXL': 'Empty Latent Ratio Select SDXL (Mikey)',
+    'Empty Latent Ratio Custom SDXL': 'Empty Latent Ratio Custom SDXL (Mikey)',
+    'Save Image With Prompt Data': 'Save Image With Prompt Data (Mikey)',
+    'Resize Image for SDXL': 'Resize Image for SDXL (Mikey)',
+    'Upscale Tile Calculator': 'Upscale Tile Calculator (Mikey)',
+    'Batch Resize Image for SDXL': 'Batch Resize Image for SDXL (Mikey)',
+    'Prompt With Style': 'Prompt With Style (Mikey)',
+    'Prompt With Style V2': 'Prompt With Style V2 (Mikey)',
+    'Prompt With Style V3': 'Prompt With Style V3 (Mikey)',
+    'Prompt With SDXL': 'Prompt With SDXL (Mikey)',
+    'Style Conditioner': 'Style Conditioner (Mikey)',
+    'HaldCLUT': 'HaldCLUT (Mikey)',
+    'VAE Decode 6GB SDXL (deprecated)': 'VAE Decode 6GB SDXL (deprecated) (Mikey)',
 }
