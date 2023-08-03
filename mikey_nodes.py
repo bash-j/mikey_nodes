@@ -503,9 +503,15 @@ class PromptWithStyle:
             neg_prompt = negative_prompt + ', ' + self.neg_style[style]
         width = self.ratio_dict[ratio_selected]["width"]
         height = self.ratio_dict[ratio_selected]["height"]
+        # calculate dimensions for target_width, target height (base) and refiner_width, refiner_height (refiner)
+        ratio = min([width, height]) / max([width, height])
+        target_width, target_height = (4096, 4096 * ratio // 8 * 8) if width > height else (4096 * ratio // 8 * 8, 4096)
+        refiner_width = target_width
+        refiner_height = target_height
+        print('Width:', width, 'Height:', height,
+              'Target Width:', target_width, 'Target Height:', target_height,
+              'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
         latent = torch.zeros([batch_size, 4, height // 8, width // 8])
-        refiner_width = width * 4
-        refiner_height = height * 4
         return ({"samples":latent},
                 str(pos_prompt),
                 str(neg_prompt),
@@ -551,9 +557,17 @@ class PromptWithStyleV2:
                                                                 negative_prompt,
                                                                 style, ratio_selected,
                                                                 batch_size, seed)
+        # calculate dimensions for target_width, target height (base) and refiner_width, refiner_height (refiner)
+        ratio = min([width, height]) / max([width, height])
+        target_width, target_height = (4096, 4096 * ratio // 8 * 8) if width > height else (4096 * ratio // 8 * 8, 4096)
+        refiner_width = target_width
+        refiner_height = target_height
+        print('Width:', width, 'Height:', height,
+              'Target Width:', target_width, 'Target Height:', target_height,
+              'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
         # encode text
-        sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base, width, height, 0, 0, width, height, pos_prompt, pos_style)[0]
-        sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base, width, height, 0, 0, width, height, neg_prompt, neg_style)[0]
+        sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base, width, height, 0, 0, target_width, target_height, pos_prompt, pos_style)[0]
+        sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base, width, height, 0, 0, target_width, target_height, neg_prompt, neg_style)[0]
         refiner_pos_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width, refiner_height, pos_prompt)[0]
         refiner_neg_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width, refiner_height, neg_prompt)[0]
         # return
@@ -588,8 +602,14 @@ class PromptWithSDXL:
         width = self.ratio_dict[ratio_selected]["width"]
         height = self.ratio_dict[ratio_selected]["height"]
         latent = torch.zeros([batch_size, 4, height // 8, width // 8])
-        refiner_width = width * 4
-        refiner_height = height * 4
+        # calculate dimensions for target_width, target height (base) and refiner_width, refiner_height (refiner)
+        ratio = min([width, height]) / max([width, height])
+        target_width, target_height = (4096, 4096 * ratio // 8 * 8) if width > height else (4096 * ratio // 8 * 8, 4096)
+        refiner_width = target_width
+        refiner_height = target_height
+        print('Width:', width, 'Height:', height,
+              'Target Width:', target_width, 'Target Height:', target_height,
+              'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
         return ({"samples":latent},
                 str(positive_prompt),
                 str(negative_prompt),
@@ -619,6 +639,8 @@ class PromptWithStyleV3:
                              "custom_height": ("INT", {"default": 1024, "min": 1, "max": 8192, "step": 1}),
                              "batch_size": ("INT", {"default": 1, "min": 1, "max": 64}),
                              "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                             "target_mode": (["match", "2x", "4x", "2x90", "4x90",
+                                              "2048","2048-90","4096", "4096-90"], {"default": "4x"}),
                              "base_model": ("MODEL",), "clip_base": ("CLIP",), "clip_refiner": ("CLIP",),
                              }
         }
@@ -680,7 +702,7 @@ class PromptWithStyleV3:
         return pos_prompt, neg_prompt
 
     def start(self, base_model, clip_base, clip_refiner, positive_prompt, negative_prompt, ratio_selected, batch_size, seed,
-              custom_size='false', fit_custom_size='false', custom_width=1024, custom_height=1024):
+              custom_size='false', fit_custom_size='false', custom_width=1024, custom_height=1024, target_mode='match'):
         if custom_size == 'true':
             if fit_custom_size == 'true':
                 if custom_width == 1 and custom_height == 1:
@@ -699,11 +721,44 @@ class PromptWithStyleV3:
 
         latent = torch.zeros([batch_size, 4, height // 8, width // 8])
         print(batch_size, 4, height // 8, width // 8)
-        #target_width = width * 4
-        #target_height = height * 4
-        target_width, target_height = find_latent_size(width, height, res=4096)
-        refiner_width = target_width
-        refiner_height = target_height
+        # calculate dimensions for target_width, target height (base) and refiner_width, refiner_height (refiner)
+        ratio = min([width, height]) / max([width, height])
+        if target_mode == 'match':
+            target_width, target_height = width, height
+            refiner_width, refiner_height = width * 4, height * 4
+            #refiner_width, refiner_height = (4096, 4096 * ratio // 8 * 8) if width > height else (4096 * ratio // 8 * 8, 4096)
+        elif target_mode == '2x':
+            target_width, target_height = width * 2, height * 2
+            refiner_width, refiner_height = width * 4, height * 4
+            #refiner_width, refiner_height = (4096, 4096 * ratio // 8 * 8) if width > height else (4096 * ratio // 8 * 8, 4096)
+        elif target_mode == '4x':
+            target_width, target_height = width * 4, height * 4
+            refiner_width, refiner_height = width * 4, height * 4
+            #refiner_width, refiner_height = (4096, 4096 * ratio // 8 * 8) if width > height else (4096 * ratio // 8 * 8, 4096)
+        elif target_mode == '2x90':
+            target_width, target_height = height * 2, width * 2
+            refiner_width, refiner_height = width * 4, height * 4
+            #refiner_width, refiner_height = (4096, 4096 * ratio // 8 * 8) if width > height else (4096 * ratio // 8 * 8, 4096)
+        elif target_mode == '4x90':
+            target_width, target_height = height * 4, width * 4
+            refiner_width, refiner_height = width * 4, height * 4
+            #refiner_width, refiner_height = (4096, 4096 * ratio // 8 * 8) if width > height else (4096 * ratio // 8 * 8, 4096)
+        elif target_mode == '4096':
+            target_width, target_height = (4096, 4096 * ratio // 8 * 8) if width > height else (4096 * ratio // 8 * 8, 4096)
+            refiner_width, refiner_height = width * 4, height * 4
+            #refiner_width, refiner_height = (4096, 4096 * ratio // 8 * 8) if width > height else (4096 * ratio // 8 * 8, 4096)
+        elif target_mode == '4096-90':
+            target_width, target_height = (4096, 4096 * ratio // 8 * 8) if width < height else (4096 * ratio // 8 * 8, 4096)
+            refiner_width, refiner_height = width * 4, height * 4
+            #refiner_width, refiner_height = (4096, 4096 * ratio // 8 * 8) if width > height else (4096 * ratio // 8 * 8, 4096)
+        elif target_mode == '2048':
+            target_width, target_height = (2048, 2048 * ratio // 8 * 8) if width > height else (2048 * ratio // 8 * 8, 2048)
+            refiner_width, refiner_height = width * 4, height * 4
+            #refiner_width, refiner_height = (4096, 4096 * ratio // 8 * 8) if width > height else (4096 * ratio // 8 * 8, 4096)
+        elif target_mode == '2048-90':
+            target_width, target_height = (2048, 2048 * ratio // 8 * 8) if width < height else (2048 * ratio // 8 * 8, 2048)
+            refiner_width, refiner_height = width * 4, height * 4
+            #refiner_width, refiner_height = (4096, 4096 * ratio // 8 * 8) if width > height else (4096 * ratio // 8 * 8, 4096)
         print('Width:', width, 'Height:', height,
               'Target Width:', target_width, 'Target Height:', target_height,
               'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
@@ -762,8 +817,8 @@ class PromptWithStyleV3:
             neg_prompt_ = re.sub(style_re, '', neg_prompt)
             pos_prompt_, neg_prompt_ = self.parse_prompts(pos_prompt_, neg_prompt_, style_, seed)
             pos_style_, neg_style_ = str(self.pos_style[style_]), str(self.neg_style[style_])
-            base_model, clip_base_pos, pos_prompt_ = self.extract_and_load_loras(pos_prompt_, base_model, clip_base)
-            base_model, clip_base_neg, neg_prompt_ = self.extract_and_load_loras(neg_prompt_, base_model, clip_base)
+            #base_model, clip_base_pos, pos_prompt_ = self.extract_and_load_loras(pos_prompt_, base_model, clip_base)
+            #base_model, clip_base_neg, neg_prompt_ = self.extract_and_load_loras(neg_prompt_, base_model, clip_base)
             width_, height_ = width, height
             refiner_width_, refiner_height_ = refiner_width, refiner_height
             # encode text
