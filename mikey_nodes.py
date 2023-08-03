@@ -633,7 +633,7 @@ class PromptWithStyleV3:
         return {"required": {"positive_prompt": ("STRING", {"multiline": True, 'default': 'Positive Prompt'}),
                              "negative_prompt": ("STRING", {"multiline": True, 'default': 'Negative Prompt'}),
                              "ratio_selected": (s.ratio_sizes,),
-                             "custom_size": (s.custom_size,),
+                             "custom_size": (s.custom_size, {"default": "false"}),
                              "fit_custom_size": (s.fit,),
                              "custom_width": ("INT", {"default": 1024, "min": 1, "max": 8192, "step": 1}),
                              "custom_height": ("INT", {"default": 1024, "min": 1, "max": 8192, "step": 1}),
