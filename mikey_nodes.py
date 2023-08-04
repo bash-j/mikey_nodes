@@ -112,62 +112,20 @@ def read_styles():
             styles.append(style)
     return styles, pos_style, neg_style
 
-def find_and_replace_wildcards(prompt, offset_seed):
-    # wildcards use the __file_name__ syntax
-    wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
-    wildcard_regex = r'(\[(\d+)\$\$)?(__(?:[^_]+_)*[^_]+__)' #r'(\[(\d+)\$\$)?__([^__]+)__\]?'
-    match_strings = []
-    offset = offset_seed
-    for full_match, lines_count_str, actual_match in re.findall(wildcard_regex, prompt):
-        actual_match = actual_match[2:-2]
-        print(f'Wildcard match: {actual_match}')
-        lines_to_insert = int(lines_count_str) if lines_count_str else 1
-        print(f'Wildcard lines to insert: {lines_to_insert}')
-        match_parts = actual_match.split('/')
-        if len(match_parts) > 1:
-            wildcard_dir = os.path.join(*match_parts[:-1])
-            wildcard_file = match_parts[-1]
-        else:
-            wildcard_dir = ''
-            wildcard_file = match_parts[0]
-        search_path = os.path.join(wildcard_path, wildcard_dir)
-        file_path = os.path.join(search_path, wildcard_file + '.txt')
-        if not os.path.isfile(file_path) and wildcard_dir == '':
-            file_path = os.path.join(wildcard_path, wildcard_file + '.txt')
-        if os.path.isfile(file_path):
-            if actual_match in match_strings:
-                offset += 1
-            # determine the number of lines in the file
-            lines_count = sum(1 for line in open(file_path, 'r', encoding='utf-8'))
-            start_idx = (offset % lines_count)
-            selected_lines = []
-            with open(file_path, 'r', encoding='utf-8') as file:
-                for i, line in enumerate(file):
-                    if (start_idx + i) % lines_count < lines_to_insert:
-                        selected_lines.append(line.strip())
-                    if len(selected_lines) == lines_to_insert:
-                        break
-            replacement_text = ','.join(selected_lines)
-            full_match_with_pattern = full_match + f"__{actual_match}__" if full_match else f"__{actual_match}__"
-            prompt = prompt.replace(full_match_with_pattern, replacement_text, 1)
-            match_strings.append(actual_match)
-            print('Wildcard prompt selected: ' + replacement_text)
-        else:
-            print(f'Wildcard file {wildcard_file}.txt not found in {search_path}')
-    return prompt
-
-def find_and_replace_wildcards(prompt, offset_seed):
+def find_and_replace_wildcards(prompt, offset_seed, debug=False):
     # wildcards use the __file_name__ syntax with optional |word_to_find
     wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
-    wildcard_regex = r'((\[(\d+)\$\$)?__([^|]+)((?:\|[^__]+)*)__\]?)'
+    wildcard_regex = r'(\[(\d+)\$\$)?__((?:[^|_]+_)*[^|_]+)((?:\|[^|]+)*)__\]?'
     match_strings = []
     offset = offset_seed
-    for full_match, _, lines_count_str, actual_match, words_to_find_str in re.findall(wildcard_regex, prompt):
+    for full_match, lines_count_str, actual_match, words_to_find_str in re.findall(wildcard_regex, prompt):
         words_to_find = words_to_find_str.split('|')[1:] if words_to_find_str else None
-        print(f'Wildcard match: {actual_match}')
-        print(f'Wildcard words to find: {words_to_find}')
+        if debug:
+            print(f'Wildcard match: {actual_match}')
+            print(f'Wildcard words to find: {words_to_find}')
         lines_to_insert = int(lines_count_str) if lines_count_str else 1
-        print(f'Wildcard lines to insert: {lines_to_insert}')
+        if debug:
+            print(f'Wildcard lines to insert: {lines_to_insert}')
         match_parts = actual_match.split('/')
         if len(match_parts) > 1:
             wildcard_dir = os.path.join(*match_parts[:-1])
@@ -201,14 +159,27 @@ def find_and_replace_wildcards(prompt, offset_seed):
                         line_number = (start_idx + i) % num_lines
                         line = file_lines[line_number].strip()
                         selected_lines.append(line)
-            replacement_text = ','.join(selected_lines)
+            if len(selected_lines) == 1:
+                replacement_text = selected_lines[0]
+            else:
+                replacement_text = ','.join(selected_lines)
             prompt = prompt.replace(full_match, replacement_text, 1)
             match_strings.append(actual_match)
             offset += lines_to_insert
-            print('Wildcard prompt selected: ' + replacement_text)
+            if debug:
+                print('Wildcard prompt selected: ' + replacement_text)
         else:
-            print(f'Wildcard file {wildcard_file}.txt not found in {search_path}')
+            if debug:
+                print(f'Wildcard file {wildcard_file}.txt not found in {search_path}')
     return prompt
+
+def add_metadata_to_dict(info_dict, **kwargs):
+    for key, value in kwargs.items():
+        if isinstance(value, (int, float, str)):
+            if key not in info_dict:
+                info_dict[key] = [value]
+            else:
+                info_dict[key].append(value)
 
 def extract_and_load_loras(text, model, clip):
     # load loras detected in the prompt text
@@ -468,6 +439,30 @@ class SaveImagesMikey:
 
         return { "ui": { "images": results } }
 
+class AddMetaData:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"label": ("STRING", {"multiline": False, "placeholder": "Label for metadata"}),
+                             "text_value": ("STRING", {"multiline": True, "placeholder": "Text to add to metadata"})},
+                "hidden": {"extra_pnginfo": "EXTRA_PNGINFO"},
+        }
+
+    RETURN_TYPES = ()
+    FUNCTION = "add_metadata"
+    CATEGORY = "Mikey/Meta"
+    OUTPUT_NODE = True
+
+    def add_metadata(self, label, text_value, prompt=None, extra_pnginfo=None):
+        if extra_pnginfo is None:
+            extra_pnginfo = {}
+        if label in extra_pnginfo:
+            extra_pnginfo[label] += ', ' + text_value
+        else:
+            extra_pnginfo[label] = text_value
+        return ({
+            'extra_pnginfo': extra_pnginfo
+        })
+
 class PromptWithStyle:
     @classmethod
     def INPUT_TYPES(s):
@@ -642,7 +637,8 @@ class PromptWithStyleV3:
                              "target_mode": (["match", "2x", "4x", "2x90", "4x90",
                                               "2048","2048-90","4096", "4096-90"], {"default": "4x"}),
                              "base_model": ("MODEL",), "clip_base": ("CLIP",), "clip_refiner": ("CLIP",),
-                             }
+                             },
+                "hidden": {"extra_pnginfo": "EXTRA_PNGINFO"},
         }
 
     RETURN_TYPES = ('MODEL','LATENT',
@@ -687,8 +683,8 @@ class PromptWithStyleV3:
         return model, clip, stripped_text
 
     def parse_prompts(self, positive_prompt, negative_prompt, style, seed):
-        positive_prompt = find_and_replace_wildcards(positive_prompt, seed)
-        negative_prompt = find_and_replace_wildcards(negative_prompt, seed)
+        positive_prompt = find_and_replace_wildcards(positive_prompt, seed, debug=True)
+        negative_prompt = find_and_replace_wildcards(negative_prompt, seed, debug=True)
         if '{prompt}' in self.pos_style[style]:
             positive_prompt = self.pos_style[style].replace('{prompt}', positive_prompt)
         if positive_prompt == '' or positive_prompt == 'Positive Prompt' or positive_prompt is None:
@@ -702,7 +698,18 @@ class PromptWithStyleV3:
         return pos_prompt, neg_prompt
 
     def start(self, base_model, clip_base, clip_refiner, positive_prompt, negative_prompt, ratio_selected, batch_size, seed,
-              custom_size='false', fit_custom_size='false', custom_width=1024, custom_height=1024, target_mode='match'):
+              custom_size='false', fit_custom_size='false', custom_width=1024, custom_height=1024, target_mode='match',
+              extra_pnginfo=None):
+        if extra_pnginfo is None:
+            extra_pnginfo = {'PromptWithStyle': {}}
+
+        prompt_with_style = extra_pnginfo.get('PromptWithStyle', {})
+
+        add_metadata_to_dict(prompt_with_style, positive_prompt=positive_prompt, negative_prompt=negative_prompt,
+                            ratio_selected=ratio_selected, batch_size=batch_size, seed=seed, custom_size=custom_size,
+                            fit_custom_size=fit_custom_size, custom_width=custom_width, custom_height=custom_height,
+                            target_mode=target_mode)
+
         if custom_size == 'true':
             if fit_custom_size == 'true':
                 if custom_width == 1 and custom_height == 1:
@@ -762,9 +769,12 @@ class PromptWithStyleV3:
         print('Width:', width, 'Height:', height,
               'Target Width:', target_width, 'Target Height:', target_height,
               'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
+        add_metadata_to_dict(prompt_with_style, width=width, height=height, target_width=target_width, target_height=target_height,
+                             refiner_width=refiner_width, refiner_height=refiner_height, crop_w=0, crop_h=0)
         # first process wildcards
         positive_prompt_ = find_and_replace_wildcards(positive_prompt, seed)
         negative_prompt_ = find_and_replace_wildcards(negative_prompt, seed)
+        add_metadata_to_dict(prompt_with_style, positive_prompt=positive_prompt_, negative_prompt=negative_prompt_)
         if len(positive_prompt_) != len(positive_prompt) or len(negative_prompt_) != len(negative_prompt):
             seed += random.randint(0, 1000000)
         positive_prompt = positive_prompt_
@@ -789,6 +799,8 @@ class PromptWithStyleV3:
             pos_prompt_, neg_prompt_ = self.parse_prompts(positive_prompt, negative_prompt, style_, seed)
             pos_style_, neg_style_ = pos_prompt_, neg_prompt_
             # encode text
+            add_metadata_to_dict(prompt_with_style, style=style_, clip_g_positive=pos_prompt, clip_l_positive=pos_style_)
+            add_metadata_to_dict(prompt_with_style, clip_g_negative=neg_prompt, clip_l_negative=neg_style_)
             sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base_pos, width, height, 0, 0, target_width, target_height, pos_prompt, pos_style_)[0]
             sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base_neg, width, height, 0, 0, target_width, target_height, neg_prompt, neg_style_)[0]
             refiner_pos_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width, refiner_height, pos_prompt)[0]
@@ -817,11 +829,15 @@ class PromptWithStyleV3:
             neg_prompt_ = re.sub(style_re, '', neg_prompt)
             pos_prompt_, neg_prompt_ = self.parse_prompts(pos_prompt_, neg_prompt_, style_, seed)
             pos_style_, neg_style_ = str(self.pos_style[style_]), str(self.neg_style[style_])
+            add_metadata_to_dict(prompt_with_style, style=style_, positive_prompt=pos_prompt_, negative_prompt=neg_prompt_,
+                                 positive_style=pos_style_, negative_style=neg_style_)
             #base_model, clip_base_pos, pos_prompt_ = self.extract_and_load_loras(pos_prompt_, base_model, clip_base)
             #base_model, clip_base_neg, neg_prompt_ = self.extract_and_load_loras(neg_prompt_, base_model, clip_base)
             width_, height_ = width, height
             refiner_width_, refiner_height_ = refiner_width, refiner_height
             # encode text
+            add_metadata_to_dict(prompt_with_style, style=style_, clip_g_positive=pos_prompt_, clip_l_positive=pos_style_)
+            add_metadata_to_dict(prompt_with_style, clip_g_negative=neg_prompt_, clip_l_negative=neg_style_)
             base_pos_conds.append(CLIPTextEncodeSDXL.encode(self, clip_base_pos, width_, height_, 0, 0, target_width, target_height, pos_prompt_, pos_style_)[0])
             base_neg_conds.append(CLIPTextEncodeSDXL.encode(self, clip_base_neg, width_, height_, 0, 0, target_width, target_height, neg_prompt_, neg_style_)[0])
             refiner_pos_conds.append(CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width_, refiner_height_, pos_prompt_)[0])
@@ -832,6 +848,8 @@ class PromptWithStyleV3:
             pos_prompt_, neg_prompt_ = self.parse_prompts(positive_prompt, negative_prompt, style_, seed)
             pos_style_, neg_style_ = pos_prompt_, neg_prompt_
             # encode text
+            add_metadata_to_dict(prompt_with_style, style=style_, clip_g_positive=pos_prompt_, clip_l_positive=pos_style_)
+            add_metadata_to_dict(prompt_with_style, clip_g_negative=neg_prompt_, clip_l_negative=neg_style_)
             sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base_pos, width, height, 0, 0, target_width, target_height, pos_prompt, pos_style_)[0]
             sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base_neg, width, height, 0, 0, target_width, target_height, neg_prompt, neg_style_)[0]
             refiner_pos_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width, refiner_height, pos_prompt)[0]
@@ -866,10 +884,11 @@ class PromptWithStyleV3:
                 weight += 1
                 refiner_neg_cond = ConditioningAverage.addWeighted(self, refiner_neg_conds[i], refiner_neg_cond, 1 / weight)[0]
         # return
+        extra_pnginfo['PromptWithStyle'] = prompt_with_style
         return (base_model, {"samples":latent},
                 sdxl_pos_cond, sdxl_neg_cond,
                 refiner_pos_cond, refiner_neg_cond,
-                pos_prompt_, neg_prompt_)
+                pos_prompt_, neg_prompt_, {'extra_pnginfo': extra_pnginfo})
 
 class StyleConditioner:
     @classmethod
@@ -1002,6 +1021,7 @@ NODE_CLASS_MAPPINGS = {
     'Prompt With Style V3': PromptWithStyleV3,
     'Prompt With SDXL': PromptWithSDXL,
     'Style Conditioner': StyleConditioner,
+    'AddMetaData': AddMetaData,
     'HaldCLUT ': HaldCLUT,
     'VAE Decode 6GB SDXL (deprecated)': VAEDecode6GB,
 }
@@ -1018,6 +1038,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Prompt With Style V3': 'Prompt With Style (Mikey)',
     'Prompt With SDXL': 'Prompt With SDXL (Mikey)',
     'Style Conditioner': 'Style Conditioner (Mikey)',
+    'AddMetaData': 'AddMetaData (Mikey)',
     'HaldCLUT': 'HaldCLUT (Mikey)',
     'VAE Decode 6GB SDXL (deprecated)': 'VAE Decode 6GB SDXL (deprecated) (Mikey)',
 }
