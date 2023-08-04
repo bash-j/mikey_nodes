@@ -173,6 +173,31 @@ def find_and_replace_wildcards(prompt, offset_seed, debug=False):
                 print(f'Wildcard file {wildcard_file}.txt not found in {search_path}')
     return prompt
 
+def strip_all_syntax(text):
+    # replace any <lora:lora_name> with nothing
+    text = re.sub(r'<lora:(.*?)>', '', text)
+    # replace any <style:style_name> with nothing
+    text = re.sub(r'<style:(.*?)>', '', text)
+    # replace any __wildcard_name__ with nothing
+    text = re.sub(r'__(.*?)__', '', text)
+    # replace any __wildcard_name|word__ with nothing
+    text = re.sub(r'__(.*?)\|(.*?)__', '', text)
+    # replace any [2$__wildcard__] with nothing
+    text = re.sub(r'\[\d+\$(.*?)\]', '', text)
+    # replace any [2$__wildcard|word__] with nothing
+    text = re.sub(r'\[\d+\$(.*?)\|(.*?)\]', '', text)
+    # replace double spaces with single spaces
+    text = text.replace('  ', ' ')
+    # replace double commas with single commas
+    text = text.replace(',,', ',')
+    # replace ` , ` with `, `
+    text = text.replace(' , ', ', ')
+    # replace leading and trailing spaces and commas
+    text = text.strip(' ,')
+    # clean up any < > [ ] or _ that are left over
+    text = text.replace('<', '').replace('>', '').replace('[', '').replace(']', '').replace('_', '')
+    return text
+
 def add_metadata_to_dict(info_dict, **kwargs):
     for key, value in kwargs.items():
         if isinstance(value, (int, float, str)):
@@ -427,7 +452,7 @@ class SaveImagesMikey:
                 pos_trunc = clean_pos.replace(' ', '_')[0:80]
             if negative_prompt:
                 metadata.add_text("negative_prompt", json.dumps(negative_prompt))
-            ts_str = datetime.datetime.now().strftime("%y%m%d%H%M%S")
+            ts_str = datetime.datetime.now().strftime("%y%m%d%H%M")
             file = f"{ts_str}_{pos_trunc}_{filename}_{counter:05}_.png"
             img.save(os.path.join(full_output_folder, file), pnginfo=metadata, compress_level=4)
             results.append({
@@ -442,26 +467,82 @@ class SaveImagesMikey:
 class AddMetaData:
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": {"label": ("STRING", {"multiline": False, "placeholder": "Label for metadata"}),
+        return {"required": {"image": ("IMAGE",),
+                             "label": ("STRING", {"multiline": False, "placeholder": "Label for metadata"}),
                              "text_value": ("STRING", {"multiline": True, "placeholder": "Text to add to metadata"})},
                 "hidden": {"extra_pnginfo": "EXTRA_PNGINFO"},
         }
 
-    RETURN_TYPES = ()
+    RETURN_TYPES = ('IMAGE',)
     FUNCTION = "add_metadata"
     CATEGORY = "Mikey/Meta"
     OUTPUT_NODE = True
 
-    def add_metadata(self, label, text_value, prompt=None, extra_pnginfo=None):
+    def add_metadata(self, image, label, text_value, prompt=None, extra_pnginfo=None):
         if extra_pnginfo is None:
             extra_pnginfo = {}
         if label in extra_pnginfo:
             extra_pnginfo[label] += ', ' + text_value
         else:
             extra_pnginfo[label] = text_value
-        return ({
-            'extra_pnginfo': extra_pnginfo
-        })
+        return (image,)
+
+class SaveMetaData:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {'image': ('IMAGE',),
+                             'filename_prefix': ("STRING", {"default": ""}),
+                             'timestamp_prefix': (['true','false'], {'default':'true'}),
+                             'counter': (['true','false'], {'default':'true'}),},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},}
+
+    RETURN_TYPES = ()
+    FUNCTION = "save_metadata"
+    CATEGORY = "Mikey/Meta"
+    OUTPUT_NODE = True
+
+    def save_metadata(self, image, filename_prefix, timestamp_prefix, counter, prompt=None, extra_pnginfo=None):
+        # save metatdata to txt file
+        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory(), 1, 1)
+        ts_str = datetime.datetime.now().strftime("%y%m%d%H%M")
+        filen = ''
+        if timestamp_prefix == 'true':
+            filen += ts_str + '_'
+        filen = filen + filename_prefix
+        if counter == 'true':
+            filen += '_' + str(counter)
+        filename = filen + '.txt'
+        file_path = os.path.join(full_output_folder, filename)
+        with open(file_path, 'w') as file:
+            for key, value in extra_pnginfo.items():
+                file.write(f'{key}: {value}\n')
+            for key, value in prompt.items():
+                file.write(f'{key}: {value}\n')
+        return {'save_metadata': {'filename': filename, 'subfolder': subfolder}}
+
+class FileNamePrefix:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {'date': (['true','false'], {'default':'true'}),
+                             'date_directory': (['true','false'], {'default':'true'}),
+                             'custom_text': ('STRING', {'default': ''})}}
+
+    RETURN_TYPES = ('STRING',)
+    RETURN_NAMES = ('filename_prefix',)
+    FUNCTION = 'get_filename_prefix'
+    CATEGORY = 'Mikey/Meta'
+
+    def get_filename_prefix(self, date, date_directory, custom_directory, custom_text):
+        filename_prefix = ''
+        if date_directory == 'true':
+            ts_str = datetime.datetime.now().strftime("%y%m%d")
+            filename_prefix += ts_str + '/'
+        if date == 'true':
+            ts_str = datetime.datetime.now().strftime("%y%m%d%H%M")
+            filename_prefix += ts_str
+        if custom_text != '':
+            filename_prefix += '_' + custom_text
+        return (filename_prefix,)
 
 class PromptWithStyle:
     @classmethod
@@ -680,6 +761,7 @@ class PromptWithStyleV3:
                 # apply the lora to the clip
                 model, clip_lora = LoraLoader.load_lora(self, model, clip, lora_filename, lora_multiplier, lora_multiplier)
                 stripped_text = stripped_text.replace(f'<lora:{lora_filename}:{lora_multiplier}>', '')
+                stripped_text = stripped_text.replace(f'<lora:{lora_filename}>', '')
         return model, clip, stripped_text
 
     def parse_prompts(self, positive_prompt, negative_prompt, style, seed):
@@ -798,6 +880,8 @@ class PromptWithStyleV3:
             style_ = 'none'
             pos_prompt_, neg_prompt_ = self.parse_prompts(positive_prompt, negative_prompt, style_, seed)
             pos_style_, neg_style_ = pos_prompt_, neg_prompt_
+            pos_prompt_, neg_prompt_ = strip_all_syntax(pos_prompt_), strip_all_syntax(neg_prompt_)
+            pos_style_, neg_style_ = strip_all_syntax(pos_style_), strip_all_syntax(neg_style_)
             # encode text
             add_metadata_to_dict(prompt_with_style, style=style_, clip_g_positive=pos_prompt, clip_l_positive=pos_style_)
             add_metadata_to_dict(prompt_with_style, clip_g_negative=neg_prompt, clip_l_negative=neg_style_)
@@ -829,6 +913,8 @@ class PromptWithStyleV3:
             neg_prompt_ = re.sub(style_re, '', neg_prompt)
             pos_prompt_, neg_prompt_ = self.parse_prompts(pos_prompt_, neg_prompt_, style_, seed)
             pos_style_, neg_style_ = str(self.pos_style[style_]), str(self.neg_style[style_])
+            pos_prompt_, neg_prompt_ = strip_all_syntax(pos_prompt_), strip_all_syntax(neg_prompt_)
+            pos_style_, neg_style_ = strip_all_syntax(pos_style_), strip_all_syntax(neg_style_)
             add_metadata_to_dict(prompt_with_style, style=style_, positive_prompt=pos_prompt_, negative_prompt=neg_prompt_,
                                  positive_style=pos_style_, negative_style=neg_style_)
             #base_model, clip_base_pos, pos_prompt_ = self.extract_and_load_loras(pos_prompt_, base_model, clip_base)
@@ -847,6 +933,8 @@ class PromptWithStyleV3:
             style_ = 'none'
             pos_prompt_, neg_prompt_ = self.parse_prompts(positive_prompt, negative_prompt, style_, seed)
             pos_style_, neg_style_ = pos_prompt_, neg_prompt_
+            pos_prompt_, neg_prompt_ = strip_all_syntax(pos_prompt_), strip_all_syntax(neg_prompt_)
+            pos_style_, neg_style_ = strip_all_syntax(pos_style_), strip_all_syntax(neg_style_)
             # encode text
             add_metadata_to_dict(prompt_with_style, style=style_, clip_g_positive=pos_prompt_, clip_l_positive=pos_style_)
             add_metadata_to_dict(prompt_with_style, clip_g_negative=neg_prompt_, clip_l_negative=neg_style_)
@@ -1022,6 +1110,7 @@ NODE_CLASS_MAPPINGS = {
     'Prompt With SDXL': PromptWithSDXL,
     'Style Conditioner': StyleConditioner,
     'AddMetaData': AddMetaData,
+    'SaveMetaData': SaveMetaData,
     'HaldCLUT ': HaldCLUT,
     'VAE Decode 6GB SDXL (deprecated)': VAEDecode6GB,
 }
@@ -1039,6 +1128,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Prompt With SDXL': 'Prompt With SDXL (Mikey)',
     'Style Conditioner': 'Style Conditioner (Mikey)',
     'AddMetaData': 'AddMetaData (Mikey)',
+    'SaveMetaData': 'SaveMetaData (Mikey)',
     'HaldCLUT': 'HaldCLUT (Mikey)',
     'VAE Decode 6GB SDXL (deprecated)': 'VAE Decode 6GB SDXL (deprecated) (Mikey)',
 }
