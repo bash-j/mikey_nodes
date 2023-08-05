@@ -853,6 +853,24 @@ class PromptWithStyleV3:
               'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
         add_metadata_to_dict(prompt_with_style, width=width, height=height, target_width=target_width, target_height=target_height,
                              refiner_width=refiner_width, refiner_height=refiner_height, crop_w=0, crop_h=0)
+        # check for $style in prompt, split the prompt into prompt and style
+        user_added_style = False
+        if '$style' in positive_prompt:
+            self.styles.append('user_added_style')
+            self.pos_style['user_added_style'] = positive_prompt.split('$style')[1].strip()
+            self.neg_style['user_added_style'] = ''
+            user_added_style = True
+        if '$style' in negative_prompt:
+            if 'user_added_style' not in self.styles:
+                self.styles.append('user_added_style')
+            self.neg_style['user_added_style'] = negative_prompt.split('$style')[1].strip()
+            user_added_style = True
+        if user_added_style:
+            positive_prompt = positive_prompt.split('$style')[0].strip()
+            if '$style' in negative_prompt:
+                negative_prompt = negative_prompt.split('$style')[0].strip()
+            positive_prompt = positive_prompt + '<style:user_added_style>'
+
         # first process wildcards
         positive_prompt_ = find_and_replace_wildcards(positive_prompt, seed)
         negative_prompt_ = find_and_replace_wildcards(negative_prompt, seed)
