@@ -452,7 +452,7 @@ class SaveImagesMikey:
                 pos_trunc = clean_pos.replace(' ', '_')[0:80]
             if negative_prompt:
                 metadata.add_text("negative_prompt", json.dumps(negative_prompt))
-            ts_str = datetime.datetime.now().strftime("%y%m%d%H%M")
+            ts_str = datetime.datetime.now().strftime("%y%m%d%H%M%S")
             file = f"{ts_str}_{pos_trunc}_{filename}_{counter:05}_.png"
             img.save(os.path.join(full_output_folder, file), pnginfo=metadata, compress_level=4)
             results.append({
