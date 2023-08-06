@@ -176,6 +176,8 @@ def find_and_replace_wildcards(prompt, offset_seed, debug=False):
 def strip_all_syntax(text):
     # replace any <lora:lora_name> with nothing
     text = re.sub(r'<lora:(.*?)>', '', text)
+    # replace any <lora:lora_name:multiplier> with nothing
+    text = re.sub(r'<lora:(.*?):(.*?)>', '', text)
     # replace any <style:style_name> with nothing
     text = re.sub(r'<style:(.*?)>', '', text)
     # replace any __wildcard_name__ with nothing
@@ -412,6 +414,46 @@ class BatchResizeImageSDXL(ResizeImageSDXL):
                 images.append(img)
         return (images,)
 
+def get_save_image_path(filename_prefix, output_dir, image_width=0, image_height=0):
+    def map_filename(filename):
+        try:
+            # Ignore files that are not images
+            if not filename.endswith('.png'):
+                return 0
+            # Assuming filenames are in the format you provided,
+            # the counter would be the second last item when splitting by '_'
+            digits = int(filename.split('_')[-2])
+        except:
+            digits = 0
+        return digits
+
+    def compute_vars(input, image_width, image_height):
+        input = input.replace("%width%", str(image_width))
+        input = input.replace("%height%", str(image_height))
+        return input
+
+    filename_prefix = compute_vars(filename_prefix, image_width, image_height)
+
+    subfolder = os.path.dirname(os.path.normpath(filename_prefix))
+    filename = os.path.basename(os.path.normpath(filename_prefix))
+
+    # Remove trailing period from filename, if present
+    if filename.endswith('.'):
+        filename = filename[:-1]
+
+    full_output_folder = os.path.join(output_dir, subfolder)
+
+    if os.path.commonpath((output_dir, os.path.abspath(full_output_folder))) != output_dir:
+        print("Saving image outside the output folder is not allowed.")
+        return {}
+
+    try:
+        counter = max(map(map_filename, os.listdir(full_output_folder)), default=0) + 1
+    except FileNotFoundError:
+        os.makedirs(full_output_folder, exist_ok=True)
+        counter = 1
+    return full_output_folder, filename, counter, subfolder, filename_prefix
+
 class SaveImagesMikey:
     def __init__(self):
         self.output_dir = folder_paths.get_output_directory()
@@ -433,7 +475,7 @@ class SaveImagesMikey:
     CATEGORY = "Mikey/Image"
 
     def save_images(self, images, filename_prefix='', prompt=None, extra_pnginfo=None, positive_prompt='', negative_prompt=''):
-        full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, self.output_dir, images[0].shape[1], images[0].shape[0])
+        full_output_folder, filename, counter, subfolder, filename_prefix = get_save_image_path(filename_prefix, self.output_dir, images[0].shape[1], images[0].shape[0])
         results = list()
         for image in images:
             i = 255. * image.cpu().numpy()
@@ -671,6 +713,7 @@ class PromptWithSDXL:
                     'negative_style_text_l','width','height','refiner_width','refiner_height',)
     FUNCTION = 'start'
     CATEGORY = 'Mikey'
+    OUTPUT_NODE = True
 
     def start(self, positive_prompt, negative_prompt, positive_style, negative_style, ratio_selected, batch_size, seed):
         positive_prompt = find_and_replace_wildcards(positive_prompt, seed)
@@ -900,17 +943,21 @@ class PromptWithStyleV3:
             pos_style_, neg_style_ = pos_prompt_, neg_prompt_
             pos_prompt_, neg_prompt_ = strip_all_syntax(pos_prompt_), strip_all_syntax(neg_prompt_)
             pos_style_, neg_style_ = strip_all_syntax(pos_style_), strip_all_syntax(neg_style_)
+            print("pos_prompt_", pos_prompt_)
+            print("neg_prompt_", neg_prompt_)
+            print("pos_style_", pos_style_)
+            print("neg_style_", neg_style_)
             # encode text
             add_metadata_to_dict(prompt_with_style, style=style_, clip_g_positive=pos_prompt, clip_l_positive=pos_style_)
             add_metadata_to_dict(prompt_with_style, clip_g_negative=neg_prompt, clip_l_negative=neg_style_)
-            sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base_pos, width, height, 0, 0, target_width, target_height, pos_prompt, pos_style_)[0]
-            sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base_neg, width, height, 0, 0, target_width, target_height, neg_prompt, neg_style_)[0]
-            refiner_pos_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width, refiner_height, pos_prompt)[0]
-            refiner_neg_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width, refiner_height, neg_prompt)[0]
+            sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base_pos, width, height, 0, 0, target_width, target_height, pos_prompt_, pos_style_)[0]
+            sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base_neg, width, height, 0, 0, target_width, target_height, neg_prompt_, neg_style_)[0]
+            refiner_pos_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width, refiner_height, pos_prompt_)[0]
+            refiner_neg_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width, refiner_height, neg_prompt_)[0]
             return (base_model, {"samples":latent},
                     sdxl_pos_cond, sdxl_neg_cond,
                     refiner_pos_cond, refiner_neg_cond,
-                    pos_prompt_, neg_prompt_)
+                    pos_prompt_, neg_prompt_, {'extra_pnginfo': extra_pnginfo})
 
         for style_prompt in style_prompts:
             """ get output from PromptWithStyle.start """
@@ -956,14 +1003,14 @@ class PromptWithStyleV3:
             # encode text
             add_metadata_to_dict(prompt_with_style, style=style_, clip_g_positive=pos_prompt_, clip_l_positive=pos_style_)
             add_metadata_to_dict(prompt_with_style, clip_g_negative=neg_prompt_, clip_l_negative=neg_style_)
-            sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base_pos, width, height, 0, 0, target_width, target_height, pos_prompt, pos_style_)[0]
-            sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base_neg, width, height, 0, 0, target_width, target_height, neg_prompt, neg_style_)[0]
-            refiner_pos_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width, refiner_height, pos_prompt)[0]
-            refiner_neg_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width, refiner_height, neg_prompt)[0]
+            sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base_pos, width, height, 0, 0, target_width, target_height, pos_prompt_, pos_style_)[0]
+            sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base_neg, width, height, 0, 0, target_width, target_height, neg_prompt_, neg_style_)[0]
+            refiner_pos_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width, refiner_height, pos_prompt_)[0]
+            refiner_neg_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width, refiner_height, neg_prompt_)[0]
             return (base_model, {"samples":latent},
                     sdxl_pos_cond, sdxl_neg_cond,
                     refiner_pos_cond, refiner_neg_cond,
-                    pos_prompt_, neg_prompt_)
+                    pos_prompt_, neg_prompt_, {'extra_pnginfo': extra_pnginfo})
         # loop through conds and add them together
         sdxl_pos_cond = base_pos_conds[0]
         weight = 1
