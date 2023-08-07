@@ -22,9 +22,18 @@ module = importlib.util.module_from_spec(spec)
 sys.modules[module_name] = module
 spec.loader.exec_module(module)
 from nodes_clip_sdxl import CLIPTextEncodeSDXL, CLIPTextEncodeSDXLRefiner
+file_path = os.path.join(folder_paths.base_path, 'comfy_extras/nodes_upscale_model.py')
+module_name = "nodes_upscale_model"
+spec = importlib.util.spec_from_file_location(module_name, file_path)
+module = importlib.util.module_from_spec(spec)
+sys.modules[module_name] = module
+spec.loader.exec_module(module)
+from nodes_upscale_model import UpscaleModelLoader, ImageUpscaleWithModel
 from comfy.model_management import unload_model, soft_empty_cache
 from nodes import LoraLoader, ConditioningAverage, common_ksampler
 import comfy.utils
+from comfy_extras.chainner_models import model_loading
+from comfy import model_management
 
 def find_latent_size(width: int, height: int, res: int = 1024) -> (int, int):
     best_w = 0
@@ -1078,6 +1087,52 @@ class StyleConditioner:
 
         return (positive_cond_base, negative_cond_base, positive_cond_refiner, negative_cond_refiner,)
 
+class MikeySampler:
+    @classmethod
+    def INPUT_TYPES(s):
+
+        return {"required": {"base_model": ("MODEL",), "refiner_model": ("MODEL",), "samples": ("LATENT",), "vae": ("VAE",),
+                             "positive_cond_base": ("CONDITIONING",), "negative_cond_base": ("CONDITIONING",),
+                             "positive_cond_refiner": ("CONDITIONING",), "negative_cond_refiner": ("CONDITIONING",),
+                             "model_name": (folder_paths.get_filename_list("upscale_models"), ),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),}}
+
+    RETURN_TYPES = ('LATENT',)
+    FUNCTION = 'run'
+    CATEGORY = 'Mikey/Sampling'
+
+    def run(self, seed, base_model, refiner_model, vae, samples, positive_cond_base, negative_cond_base,
+            positive_cond_refiner, negative_cond_refiner, model_name):
+        uml = UpscaleModelLoader()
+        upscale_model = uml.load_model(model_name)[0]
+        iuwm = ImageUpscaleWithModel()
+        #common_ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent, denoise=1.0,
+        # disable_noise=False, start_step=None, last_step=None, force_full_denoise=False)
+        # step 1 run base model
+        sample1 = common_ksampler(base_model, seed, 25, 6.5, 'dpmpp_2s_ancestral', 'simple', positive_cond_base, negative_cond_base, samples,
+                                  start_step=0, last_step=18, force_full_denoise=False)[0]
+        # step 2 run refiner model
+        sample2 = common_ksampler(refiner_model, seed, 50, 7.0, 'dpmpp_2m', 'simple', positive_cond_refiner, negative_cond_refiner, sample1,
+                                  disable_noise=True, start_step=35, last_step=50, force_full_denoise=True)[0]
+        # step 3 upscale
+        img = vae.decode(sample2["samples"])
+        img = iuwm.upscale(upscale_model, image=img)[0]
+        img = img.movedim(-1,1)
+        width = round(img.shape[3] * .5)
+        height = round(img.shape[2] * .5)
+        img = comfy.utils.common_upscale(img, width, height, "nearest-exact", "disabled")
+        img = img.movedim(1,-1)
+        x = (img.shape[1] // 8) * 8
+        y = (img.shape[2] // 8) * 8
+        if img.shape[1] != x or img.shape[2] != y:
+            x_offset = (img.shape[1] % 8) // 2
+            y_offset = (img.shape[2] % 8) // 2
+            img = img[:, x_offset:x + x_offset, y_offset:y + y_offset, :]
+        sample2x = {"samples": vae.encode(img[:,:,:,:3]),}
+        # step 3 run base model
+        return common_ksampler(base_model, seed, 16, 9.5, 'dpmpp_2m', 'simple', positive_cond_base, negative_cond_base, sample2x,
+                                  start_step=9, last_step=16, force_full_denoise=True)
+
 class PromptWithSDXL:
     @classmethod
     def INPUT_TYPES(s):
@@ -1175,6 +1230,7 @@ NODE_CLASS_MAPPINGS = {
     'Prompt With Style V3': PromptWithStyleV3,
     'Prompt With SDXL': PromptWithSDXL,
     'Style Conditioner': StyleConditioner,
+    'Mikey Sampler': MikeySampler,
     'AddMetaData': AddMetaData,
     'SaveMetaData': SaveMetaData,
     'HaldCLUT ': HaldCLUT,
@@ -1193,6 +1249,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Prompt With Style V3': 'Prompt With Style (Mikey)',
     'Prompt With SDXL': 'Prompt With SDXL (Mikey)',
     'Style Conditioner': 'Style Conditioner (Mikey)',
+    'Mikey Sampler': 'Mikey Sampler',
     'AddMetaData': 'AddMetaData (Mikey)',
     'SaveMetaData': 'SaveMetaData (Mikey)',
     'HaldCLUT': 'HaldCLUT (Mikey)',
