@@ -1095,14 +1095,15 @@ class MikeySampler:
                              "positive_cond_base": ("CONDITIONING",), "negative_cond_base": ("CONDITIONING",),
                              "positive_cond_refiner": ("CONDITIONING",), "negative_cond_refiner": ("CONDITIONING",),
                              "model_name": (folder_paths.get_filename_list("upscale_models"), ),
-                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),}}
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                             "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1}),}}
 
     RETURN_TYPES = ('LATENT',)
     FUNCTION = 'run'
     CATEGORY = 'Mikey/Sampling'
 
     def run(self, seed, base_model, refiner_model, vae, samples, positive_cond_base, negative_cond_base,
-            positive_cond_refiner, negative_cond_refiner, model_name):
+            positive_cond_refiner, negative_cond_refiner, model_name, upscale_by=1.0):
         uml = UpscaleModelLoader()
         upscale_model = uml.load_model(model_name)[0]
         iuwm = ImageUpscaleWithModel()
@@ -1116,11 +1117,11 @@ class MikeySampler:
                                   disable_noise=True, start_step=35, last_step=50, force_full_denoise=True)[0]
         # step 3 upscale
         img = vae.decode(sample2["samples"])
+        org_width, org_height = img.shape[2], img.shape[1]
         img = iuwm.upscale(upscale_model, image=img)[0]
         img = img.movedim(-1,1)
-        width = round(img.shape[3] * .5)
-        height = round(img.shape[2] * .5)
-        img = comfy.utils.common_upscale(img, width, height, "nearest-exact", "disabled")
+        upscaled_width, upscaled_height = int(org_width * upscale_by // 8 * 8), int(org_height * upscale_by // 8 * 8)
+        img = comfy.utils.common_upscale(img, upscaled_width, upscaled_height, "nearest-exact", "disabled")
         img = img.movedim(1,-1)
         x = (img.shape[1] // 8) * 8
         y = (img.shape[2] // 8) * 8
