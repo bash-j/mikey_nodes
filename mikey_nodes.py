@@ -117,6 +117,7 @@ def find_and_replace_wildcards(prompt, offset_seed, debug=False):
     wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
     wildcard_regex = r'(\[(\d+)\$\$)?__((?:[^|_]+_)*[^|_]+)((?:\|[^|]+)*)__\]?'
     match_strings = []
+    random.seed(offset_seed)
     offset = offset_seed
     for full_match, lines_count_str, actual_match, words_to_find_str in re.findall(wildcard_regex, prompt):
         words_to_find = words_to_find_str.split('|')[1:] if words_to_find_str else None
