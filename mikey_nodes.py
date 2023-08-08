@@ -8,9 +8,11 @@ import random
 import re
 import sys
 
+import cv2
 import numpy as np
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
+from skimage.feature import graycomatrix, graycoprops
 import torch
 import torch.nn.functional as F
 
@@ -30,7 +32,7 @@ sys.modules[module_name] = module
 spec.loader.exec_module(module)
 from nodes_upscale_model import UpscaleModelLoader, ImageUpscaleWithModel
 from comfy.model_management import unload_model, soft_empty_cache
-from nodes import LoraLoader, ConditioningAverage, common_ksampler
+from nodes import LoraLoader, ConditioningAverage, common_ksampler, ImageScale, VAEEncode, VAEDecode
 import comfy.utils
 from comfy_extras.chainner_models import model_loading
 from comfy import model_management
@@ -372,6 +374,10 @@ def tensor2pil(image):
 # PIL to Tensor
 def pil2tensor(image):
     return torch.from_numpy(np.array(image).astype(np.float32) / 255.0).unsqueeze(0)
+
+def tensor2numpy(image):
+    # Convert tensor to numpy array and transpose dimensions from (C, H, W) to (H, W, C)
+    return (255.0 * image.cpu().numpy().squeeze().transpose(1, 2, 0)).astype(np.uint8)
 
 class WildcardProcessor:
     @classmethod
@@ -1025,8 +1031,8 @@ class PromptWithStyleV3:
             positive_prompt = positive_prompt + '<style:user_added_style>'
 
         # first process wildcards
-        positive_prompt_ = find_and_replace_wildcards(positive_prompt, seed)
-        negative_prompt_ = find_and_replace_wildcards(negative_prompt, seed)
+        positive_prompt_ = find_and_replace_wildcards(positive_prompt, seed, True)
+        negative_prompt_ = find_and_replace_wildcards(negative_prompt, seed, True)
         add_metadata_to_dict(prompt_with_style, positive_prompt=positive_prompt_, negative_prompt=negative_prompt_)
         if len(positive_prompt_) != len(positive_prompt) or len(negative_prompt_) != len(negative_prompt):
             seed += random.randint(0, 1000000)
@@ -1187,6 +1193,48 @@ class StyleConditioner:
 
         return (positive_cond_base, negative_cond_base, positive_cond_refiner, negative_cond_refiner,)
 
+def calculate_image_complexity(image):
+    pil_image = tensor2pil(image)
+    image = np.array(pil_image)
+
+    # Convert image to grayscale for edge detection, GLCM, and entropy
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # 1. Edge Detection
+    edges = cv2.Canny(gray, 100, 200)
+    edge_density = float(np.sum(edges)) / (image.shape[0] * image.shape[1])
+
+    # 2. Texture Analysis using GLCM
+    glcm = graycomatrix(gray, [1], [0], 256, symmetric=True, normed=True)
+
+    max_contrast = 100  # adjust based on your typical range if needed
+    contrast = max_contrast - graycoprops(glcm, 'contrast')[0, 0]
+    contrast = contrast / max_contrast  # Normalize contrast
+
+    dissimilarity = graycoprops(glcm, 'dissimilarity')[0, 0]
+
+    # Normalize dissimilarity (assuming an arbitrary range of 0 to 10, adjust if needed)
+    dissimilarity /= 10
+
+    # 3. Color Variability
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    hue_std = np.std(hsv[:, :, 0]) / 180  # Normalize: hue values range from 0 to 180 in OpenCV
+    saturation_std = np.std(hsv[:, :, 1]) / 255  # Normalize: saturation values range from 0 to 255
+    value_std = np.std(hsv[:, :, 2]) / 255  # Normalize: value (brightness) values range from 0 to 255
+
+    # 4. Entropy
+    hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
+    hist /= hist.sum()
+    entropy = -np.sum(hist*np.log2(hist + np.finfo(float).eps))  # Adding epsilon to avoid log(0)
+    # Normalize entropy assuming an arbitrary range of 0 to 8 (adjust if needed)
+    entropy /= 8
+
+    # Compute a combined complexity score.
+    # You can adjust the weights as per the importance of each feature.
+    complexity = edge_density + contrast + dissimilarity + hue_std + saturation_std + value_std + entropy
+
+    return complexity
+
 class MikeySampler:
     @classmethod
     def INPUT_TYPES(s):
@@ -1196,43 +1244,52 @@ class MikeySampler:
                              "positive_cond_refiner": ("CONDITIONING",), "negative_cond_refiner": ("CONDITIONING",),
                              "model_name": (folder_paths.get_filename_list("upscale_models"), ),
                              "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                             "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1}),}}
+                             "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1}),
+                             "hires_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.1})}}
 
     RETURN_TYPES = ('LATENT',)
     FUNCTION = 'run'
     CATEGORY = 'Mikey/Sampling'
 
+    def adjust_start_step(self, image_complexity, hires_strength=1.0):
+        image_complexity /= 10
+        if image_complexity > 1:
+            image_complexity = 1
+        image_complexity = min([0.55, image_complexity]) * hires_strength
+        return min([16, 16 - int(round(image_complexity * 16,0))])
+
     def run(self, seed, base_model, refiner_model, vae, samples, positive_cond_base, negative_cond_base,
-            positive_cond_refiner, negative_cond_refiner, model_name, upscale_by=1.0):
+            positive_cond_refiner, negative_cond_refiner, model_name, upscale_by=1.0, hires_strength=1.0):
+        image_scaler = ImageScale()
+        vaeencoder = VAEEncode()
+        vaedecoder = VAEDecode()
         uml = UpscaleModelLoader()
         upscale_model = uml.load_model(model_name)[0]
         iuwm = ImageUpscaleWithModel()
-        #common_ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent, denoise=1.0,
+        # common_ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent, denoise=1.0,
         # disable_noise=False, start_step=None, last_step=None, force_full_denoise=False)
         # step 1 run base model
         sample1 = common_ksampler(base_model, seed, 25, 6.5, 'dpmpp_2s_ancestral', 'simple', positive_cond_base, negative_cond_base, samples,
                                   start_step=0, last_step=18, force_full_denoise=False)[0]
         # step 2 run refiner model
-        sample2 = common_ksampler(refiner_model, seed, 50, 7.0, 'dpmpp_2m', 'simple', positive_cond_refiner, negative_cond_refiner, sample1,
-                                  disable_noise=True, start_step=35, last_step=50, force_full_denoise=True)[0]
+        sample2 = common_ksampler(refiner_model, seed, 30, 3.5, 'dpmpp_2m', 'simple', positive_cond_refiner, negative_cond_refiner, sample1,
+                                  disable_noise=True, start_step=21, force_full_denoise=True)[0]
         # step 3 upscale
-        img = vae.decode(sample2["samples"])
-        org_width, org_height = img.shape[2], img.shape[1]
-        img = iuwm.upscale(upscale_model, image=img)[0]
-        img = img.movedim(-1,1)
+        pixels = vaedecoder.decode(vae, sample2)[0]
+        org_width, org_height = pixels.shape[2], pixels.shape[1]
+        img = iuwm.upscale(upscale_model, image=pixels)[0]
         upscaled_width, upscaled_height = int(org_width * upscale_by // 8 * 8), int(org_height * upscale_by // 8 * 8)
-        img = comfy.utils.common_upscale(img, upscaled_width, upscaled_height, "nearest-exact", "disabled")
-        img = img.movedim(1,-1)
-        x = (img.shape[1] // 8) * 8
-        y = (img.shape[2] // 8) * 8
-        if img.shape[1] != x or img.shape[2] != y:
-            x_offset = (img.shape[1] % 8) // 2
-            y_offset = (img.shape[2] % 8) // 2
-            img = img[:, x_offset:x + x_offset, y_offset:y + y_offset, :]
-        sample2x = {"samples": vae.encode(img[:,:,:,:3]),}
+        img = image_scaler.upscale(img, 'nearest-exact', upscaled_width, upscaled_height, 'center')[0]
+        # Adjust start_step based on complexity
+        image_complexity = calculate_image_complexity(img)
+        print('Image Complexity:', image_complexity)
+        start_step = self.adjust_start_step(image_complexity, hires_strength)
+        # encode image
+        latent = vaeencoder.encode(vae, img)[0]
         # step 3 run base model
-        return common_ksampler(base_model, seed, 16, 9.5, 'dpmpp_2m', 'simple', positive_cond_base, negative_cond_base, sample2x,
-                                  start_step=9, last_step=16, force_full_denoise=True)
+        out = common_ksampler(base_model, seed, 16, 9.5, 'dpmpp_2m_sde', 'karras', positive_cond_base, negative_cond_base, latent,
+                                  start_step=start_step, force_full_denoise=True)
+        return out
 
 class PromptWithSDXL:
     @classmethod
