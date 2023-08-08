@@ -183,6 +183,80 @@ def find_and_replace_wildcards(prompt, offset_seed, debug=False):
                 print(f'Wildcard file {wildcard_file}.txt not found in {search_path}')
     return prompt
 
+def find_and_replace_wildcards(prompt, offset_seed, debug=False):
+    # wildcards use the __file_name__ syntax with optional |word_to_find
+    wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
+    wildcard_regex = r'(\[(\d+)\$\$)?__((?:[^|_]+_)*[^|_]+)((?:\|[^|]+)*)__\]?'
+    match_strings = []
+    random.seed(offset_seed)
+    offset = offset_seed
+
+    new_prompt = ''
+    last_end = 0
+
+    for m in re.finditer(wildcard_regex, prompt):
+        full_match, lines_count_str, actual_match, words_to_find_str = m.groups()
+        # Append everything up to this match
+        new_prompt += prompt[last_end:m.start()]
+
+    #for full_match, lines_count_str, actual_match, words_to_find_str in re.findall(wildcard_regex, prompt):
+        words_to_find = words_to_find_str.split('|')[1:] if words_to_find_str else None
+        if debug:
+            print(f'Wildcard match: {actual_match}')
+            print(f'Wildcard words to find: {words_to_find}')
+        lines_to_insert = int(lines_count_str) if lines_count_str else 1
+        if debug:
+            print(f'Wildcard lines to insert: {lines_to_insert}')
+        match_parts = actual_match.split('/')
+        if len(match_parts) > 1:
+            wildcard_dir = os.path.join(*match_parts[:-1])
+            wildcard_file = match_parts[-1]
+        else:
+            wildcard_dir = ''
+            wildcard_file = match_parts[0]
+        search_path = os.path.join(wildcard_path, wildcard_dir)
+        file_path = os.path.join(search_path, wildcard_file + '.txt')
+        if not os.path.isfile(file_path) and wildcard_dir == '':
+            file_path = os.path.join(wildcard_path, wildcard_file + '.txt')
+        if os.path.isfile(file_path):
+            if actual_match in match_strings:
+                offset += 1
+            selected_lines = []
+            with open(file_path, 'r', encoding='utf-8') as file:
+                file_lines = file.readlines()
+                num_lines = len(file_lines)
+                if words_to_find:
+                    for i in range(lines_to_insert):
+                        start_idx = (offset + i) % num_lines
+                        for j in range(num_lines):
+                            line_number = (start_idx + j) % num_lines
+                            line = file_lines[line_number].strip()
+                            if any(re.search(r'\b' + re.escape(word) + r'\b', line, re.IGNORECASE) for word in words_to_find):
+                                selected_lines.append(line)
+                                break
+                else:
+                    start_idx = offset % num_lines
+                    for i in range(lines_to_insert):
+                        line_number = (start_idx + i) % num_lines
+                        line = file_lines[line_number].strip()
+                        selected_lines.append(line)
+            if len(selected_lines) == 1:
+                replacement_text = selected_lines[0]
+            else:
+                replacement_text = ','.join(selected_lines)
+            new_prompt += replacement_text
+            match_strings.append(actual_match)
+            offset += lines_to_insert
+            if debug:
+                print('Wildcard prompt selected: ' + replacement_text)
+        else:
+            if debug:
+                print(f'Wildcard file {wildcard_file}.txt not found in {search_path}')
+        last_end = m.end()
+    new_prompt += prompt[last_end:]
+    return new_prompt
+
+
 def strip_all_syntax(text):
     # replace any <lora:lora_name> with nothing
     text = re.sub(r'<lora:(.*?)>', '', text)
@@ -298,6 +372,20 @@ def tensor2pil(image):
 # PIL to Tensor
 def pil2tensor(image):
     return torch.from_numpy(np.array(image).astype(np.float32) / 255.0).unsqueeze(0)
+
+class WildcardProcessor:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"prompt": ("STRING", {"multiline": True, "placeholder": "Prompt Text"}),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff})}}
+
+    RETURN_TYPES = ('STRING',)
+    FUNCTION = 'process'
+    CATEGORY = 'Mikey/Text'
+
+    def process(self, prompt, seed):
+        prompt = find_and_replace_wildcards(prompt, seed)
+        return (prompt, )
 
 class HaldCLUT:
     @classmethod
@@ -615,20 +703,32 @@ class PromptWithStyle:
                     'negative_style_text_l','width','height','refiner_width','refiner_height',)
     FUNCTION = 'start'
     CATEGORY = 'Mikey'
+    OUTPUT_NODE = True
 
     def start(self, positive_prompt, negative_prompt, style, ratio_selected, batch_size, seed):
-        positive_prompt = find_and_replace_wildcards(positive_prompt, seed)
-        negative_prompt = find_and_replace_wildcards(negative_prompt, seed)
-        if '{prompt}' in self.pos_style[style]:
-            positive_prompt = self.pos_style[style].replace('{prompt}', positive_prompt)
-        if positive_prompt == '' or positive_prompt == 'Positive Prompt' or positive_prompt is None:
+        # first process wildcards
+        print('Positive Prompt Entered:', positive_prompt)
+        pos_prompt = find_and_replace_wildcards(positive_prompt, seed, debug=True)
+        print('Positive Prompt:', pos_prompt)
+        print('Negative Prompt Entered:', negative_prompt)
+        neg_prompt = find_and_replace_wildcards(negative_prompt, seed, debug=True)
+        print('Negative Prompt:', neg_prompt)
+        if pos_prompt != '' and pos_prompt != 'Positive Prompt' and pos_prompt is not None:
+            if '{prompt}' in self.pos_style[style]:
+                pos_prompt = self.pos_style[style].replace('{prompt}', pos_prompt)
+            else:
+                if self.pos_style[style]:
+                    pos_prompt = pos_prompt + ', ' + self.pos_style[style]
+        else:
             pos_prompt = self.pos_style[style]
+        if neg_prompt != '' and neg_prompt != 'Negative Prompt' and neg_prompt is not None:
+            if '{prompt}' in self.neg_style[style]:
+                neg_prompt = self.neg_style[style].replace('{prompt}', neg_prompt)
+            else:
+                if self.neg_style[style]:
+                    neg_prompt = neg_prompt + ', ' + self.neg_style[style]
         else:
-            pos_prompt = positive_prompt + ', ' + self.pos_style[style]
-        if negative_prompt == '' or negative_prompt == 'Negative Prompt' or negative_prompt is None:
             neg_prompt = self.neg_style[style]
-        else:
-            neg_prompt = negative_prompt + ', ' + self.neg_style[style]
         width = self.ratio_dict[ratio_selected]["width"]
         height = self.ratio_dict[ratio_selected]["height"]
         # calculate dimensions for target_width, target height (base) and refiner_width, refiner_height (refiner)
@@ -1220,6 +1320,7 @@ class VAEDecode6GB:
         return (vae.decode(samples['samples']), )
 
 NODE_CLASS_MAPPINGS = {
+    'Wildcard Processor': WildcardProcessor,
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
     'Empty Latent Ratio Custom SDXL': EmptyLatentRatioCustom,
     'Save Image With Prompt Data': SaveImagesMikey,
@@ -1239,6 +1340,7 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
+    'Wildcard Processor': 'Wildcard Processor (Mikey)',
     'Empty Latent Ratio Select SDXL': 'Empty Latent Ratio Select SDXL (Mikey)',
     'Empty Latent Ratio Custom SDXL': 'Empty Latent Ratio Custom SDXL (Mikey)',
     'Save Image With Prompt Data': 'Save Image With Prompt Data (Mikey)',
