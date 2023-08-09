@@ -1180,6 +1180,8 @@ class StyleConditioner:
         neg_prompt = self.neg_style[style]
         pos_prompt = pos_prompt.replace('{prompt}', '')
         neg_prompt = neg_prompt.replace('{prompt}', '')
+        if style == 'none':
+            return (positive_cond_base, negative_cond_base, positive_cond_refiner, negative_cond_refiner,)
         # encode the style prompt
         positive_cond_base_new = CLIPTextEncodeSDXL.encode(self, base_clip, 1024, 1024, 0, 0, 1024, 1024, pos_prompt, pos_prompt)[0]
         negative_cond_base_new = CLIPTextEncodeSDXL.encode(self, base_clip, 1024, 1024, 0, 0, 1024, 1024, neg_prompt, neg_prompt)[0]
@@ -1404,9 +1406,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Resize Image for SDXL': 'Resize Image for SDXL (Mikey)',
     'Upscale Tile Calculator': 'Upscale Tile Calculator (Mikey)',
     'Batch Resize Image for SDXL': 'Batch Resize Image for SDXL (Mikey)',
+    'Prompt With Style V3': 'Prompt With Style (Mikey)',
     'Prompt With Style': 'Prompt With Style V1 (Mikey)',
     'Prompt With Style V2': 'Prompt With Style V2 (Mikey)',
-    'Prompt With Style V3': 'Prompt With Style (Mikey)',
     'Prompt With SDXL': 'Prompt With SDXL (Mikey)',
     'Style Conditioner': 'Style Conditioner (Mikey)',
     'Mikey Sampler': 'Mikey Sampler',
