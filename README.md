@@ -61,7 +61,7 @@ This is a sampler node as a companion to the Prompt with Style node, to allow fo
 
 The node uses a base -> refiner -> upscale with model -> base to produce the final image. It has an inbuilt image complexity detection function to make sure there aren't too many steps run on the final base sampler which can scramble faces and other simple areas on a large image. 
 
-model_name is for the image uspcale model. These can be found at [Model Database](https://upscale.wiki/wiki/Model_Database) and place them in the `ComfyUI\models\upscale_models` directory. I recommend lollipop as it provides a good balanced image that is not too sharp. If you want lots of sharp details, then try the NMKD Superscale or 4x-UltraSharp.
+model_name is for the image uspcale model. These can be found at [OpenModelDB](https://openmodeldb.info/) and place them in the `ComfyUI\models\upscale_models` directory. I recommend lollipop as it provides a good balanced image that is not too sharp. If you want lots of sharp details, then try the NMKD Superscale or 4x-UltraSharp.
 
 The seed is used by the samplers.
 
@@ -108,7 +108,7 @@ This node is for building a string using your wildcard files.
 
 ![image](https://github.com/bash-j/mikey_nodes/assets/3195567/dbe07727-3b4e-473a-bdde-eb0d8ccb7e64)
 
-Shout out to masslevel on discord for the great idea to have nodes for metadata.
+I want to give a shout-out to masslevel on discord for the great idea to have nodes for metadata.
 
 This node lets you add more metadata to the image that is passed through this node in your workflow. The metadata should be written to the image file in the Save Image node.
 
