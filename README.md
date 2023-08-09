@@ -1,4 +1,4 @@
-![image](https://github.com/bash-j/mikey_nodes/assets/3195567/95b26181-98e6-4db4-8bc6-8d62d6de2d18)# Mikey Nodes
+# Mikey Nodes
 
 This repository contains custom nodes for ComfyUI.
 
