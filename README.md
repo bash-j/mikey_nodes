@@ -134,10 +134,6 @@ This node should pick up the info stored in the prompt and extra_pnginfo data an
 
 This will apply a HaldCLUT to an image to change the colors, which tend to imitate the look of the film or filter. I have included some in this package, but you can find more png files at [rawtherapee.com](http://rawtherapee.com/shared/HaldCLUT.zip)
 
-## Upscale Tile Calculator
-
-This node will calculate tile sizes that hopefully fit perfectly into the upscaled image close the resolution entered.
-
 ## VAE Decode 6GB (deprecated)
 
 This node is a bandaid fix for Mikey's 3060 6GB graphics card to keep VRAM usage below 6GB.
