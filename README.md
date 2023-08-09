@@ -5,6 +5,8 @@ This repository contains custom nodes for ComfyUI.
 ## Prompt With Style
 ![image](https://github.com/bash-j/mikey_nodes/assets/3195567/0048faa8-5f46-4d92-8e38-e7ff603007da)
 
+Example workflow in the prompt_with_styles.json file and mikey_node_workflow.json
+
 This node allows you to prompt with a style and loras. You can add a lora with `<lora:lora_name>` or `<lora:lora_name:0.8>` syntax for a weight of 0.8 as an example.
 
 You can add styles by using the `<style:style_name>` syntax.
@@ -12,11 +14,14 @@ You can add styles by using the `<style:style_name>` syntax.
 Some of the styles built in are:
 `SAI-Enhance, SAI-Anime, SAI-Photographic, SAI-Digital art, SAI-Comic book, SAI-Fantasy art, SAI-Analog film, SAI-Neonpunk, SAI-Isometric, SAI-Lowpoly, SAI-Origami, SAI-Line art, SAI-Craft clay, SAI-Cinematic, SAI-3d-model, SAI-pixel art, SAI-Texture, photographic, deep-field, analog-film, cinematic, red, documentary, nature-photography, editorial, polaroid, 3d-model, low-poly, modeling-compound, diorama, miniatures, abstract, anime, comic-book, digital-art, fantasy-art, dark-fantasy, oil-painting, watercolor, charcoal, color-pencil, crayon, cross-stitch, felt, origami, scrapbook, isometric, line-art, vector-art, neon-punk, pixel-art, tile-texture, lithography, mosaic, woodblock-print, sticker, stained-glass, tattoo, statue, album-art, wes-anderson, vaporwave, clarendon, gingham, juno, lark, nonagon, kaleidoscope, haunting, glam, mecha, padam, collage, paper-mache, macrame, quilling, pottery, batik, felting, marquetry, wildstyle-graffiti, bubble-graffiti, stencil-graffiti, throw-up-graffiti, tag-graffiti`
 
+There is a V1 and V2 Prompt with Style node with different functionality, style selection instead of style syntax, no clip conditioning. Check them out if you like to break your workflow up into more nodes.
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/03ca6183-0144-4533-a46a-c7accb8d9ec7)
+
 ### Wildcards
 
 Wildcards are supported using the `__word__` syntax. Folder location is comfyui/wildcards You can select more than 1 line from the wildcard by using the syntax `[2$$__wildcard__]` for 2 lines in this example. You can also add a word to search for in the wildcard file e.g. `__wildcard|word__`
 
-Example workflow in the prompt_with_styles.json file.
+### Styles
 
 You can add your own styles to a file named user_styles.json in the root ComfyUI folder. You have to create this file yourself.
 
@@ -33,6 +38,8 @@ The format needs to look like the following example:
 }
 ```
 
+### Image Size Ratios
+
 You can also add your own custom ratios to a file named user_ratios.json in the root ComfyUI folder. You have to create this file yourself.
 
 The format needs to look like the following example:
@@ -46,7 +53,9 @@ The format needs to look like the following example:
 ```
 
 ## Mikey Sampler
-![image](https://github.com/bash-j/mikey_nodes/assets/3195567/a33bbb1a-71af-40a2-94c9-aaa9cd9bef59)
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/beb24edb-4655-4d00-933a-e3fa2304aef2)
+
+Example workflow: mikey_node_workflow.json
 
 This is a sampler node as a companion to the Prompt with Style node, to allow for very straightforward image generation with SDXL.
 
@@ -59,6 +68,12 @@ The seed is used by the samplers.
 The upscale_by setting is how large you want the final image to be before it runs the last base sampler over the image. A value of 1 will output the original image size. 2 will be 2x the size of the original.
 
 The highres_strength setting allows you to control this. Dial it down if you are still getting scrambled images, or turn it up if you want to add more detail. 
+
+## Style Conditioner
+
+This chonky node is for injecting the style prompt into your conditioner by averaging the conditioner passed through the node.
+
+A strength value of 0.5 would be even split between the conditioner passed in and the style selected.
 
 ## Empty Latent Ratio Select SDXL
 
@@ -83,6 +98,25 @@ This node allows you to save an image with the prompt data in the filename.
 The filename will start with a datestamp, then part of the positive prompt.
 
 It will also save the positive prompt and negative prompt to the png data.
+
+## Wildcard Processor
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/ce62e6d7-1982-4c53-bde1-7569c94322e3)
+
+This node is for building a string using your wildcard files.
+
+## Add Metadata
+
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/dbe07727-3b4e-473a-bdde-eb0d8ccb7e64)
+
+Shout out to masslevel on discord for the great idea to have nodes for metadata.
+
+This node lets you add more metadata to the image that is passed through this node in your workflow. The metadata should be written to the image file in the Save Image node.
+
+The label is the key or label you want to give to the metadata, and the text box is for entering a value. Convert these to inputs if you want to pipe in string values from other nodes.
+
+## Save Metadata
+
+This node should pick up the info stored in the prompt and extra_pnginfo data and save it to a txt file
 
 ## HaldCLUT
 
