@@ -469,8 +469,7 @@ class ResizeImageSDXL:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": { "image": ("IMAGE",), "upscale_method": (s.upscale_methods,),
-                              "crop": (s.crop_methods,)},
-                "optional": { "mask": ("MASK", )}}
+                              "crop": (s.crop_methods,)}}
 
     RETURN_TYPES = ('IMAGE',)
     FUNCTION = 'resize'
