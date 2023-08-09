@@ -587,17 +587,17 @@ class SaveImagesMikey:
             metadata = PngInfo()
             pos_trunc = ''
             if prompt is not None:
-                metadata.add_text("prompt", json.dumps(prompt))
+                metadata.add_text("prompt", json.dumps(prompt, ensure_ascii=False))
             if extra_pnginfo is not None:
                 for x in extra_pnginfo:
-                    metadata.add_text(x, json.dumps(extra_pnginfo[x]))
+                    metadata.add_text(x, json.dumps(extra_pnginfo[x], ensure_ascii=False))
             if positive_prompt:
-                metadata.add_text("positive_prompt", json.dumps(positive_prompt))
+                metadata.add_text("positive_prompt", json.dumps(positive_prompt, ensure_ascii=False))
                 # replace any special characters with nothing and spaces with _
                 clean_pos = re.sub(r'[^a-zA-Z0-9 ]', '', positive_prompt)
                 pos_trunc = clean_pos.replace(' ', '_')[0:80]
             if negative_prompt:
-                metadata.add_text("negative_prompt", json.dumps(negative_prompt))
+                metadata.add_text("negative_prompt", json.dumps(negative_prompt, ensure_ascii=False))
             ts_str = datetime.datetime.now().strftime("%y%m%d%H%M%S")
             file = f"{ts_str}_{pos_trunc}_{filename}_{counter:05}_.png"
             img.save(os.path.join(full_output_folder, file), pnginfo=metadata, compress_level=4)
