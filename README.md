@@ -3,8 +3,7 @@
 This repository contains custom nodes for ComfyUI.
 
 ## Prompt With Style
-
-![image](https://github.com/bash-j/mikey_nodes/assets/3195567/b39f6693-d0c4-479d-9c8f-530dfb67e7e4)
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/0048faa8-5f46-4d92-8e38-e7ff603007da)
 
 This node allows you to prompt with a style and loras. You can add a lora with `<lora:lora_name>` or `<lora:lora_name:0.8>` syntax for a weight of 0.8 as an example.
 
@@ -16,8 +15,6 @@ Some of the styles built in are:
 ### Wildcards
 
 Wildcards are supported using the `__word__` syntax. Folder location is comfyui/wildcards You can select more than 1 line from the wildcard by using the syntax `[2$$__wildcard__]` for 2 lines in this example. You can also add a word to search for in the wildcard file e.g. `__wildcard|word__`
-
-There are outputs for image size and prompts for the clip conditioners.
 
 Example workflow in the prompt_with_styles.json file.
 
@@ -47,6 +44,21 @@ The format needs to look like the following example:
     }
 }
 ```
+
+## Mikey Sampler
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/a33bbb1a-71af-40a2-94c9-aaa9cd9bef59)
+
+This is a sampler node as a companion to the Prompt with Style node, to allow for very straightforward image generation with SDXL.
+
+The node uses a base -> refiner -> upscale with model -> base to produce the final image. It has an inbuilt image complexity detection function to make sure there aren't too many steps run on the final base sampler which can scramble faces and other simple areas on a large image. 
+
+model_name is for the image uspcale model. These can be found at [Model Database](https://upscale.wiki/wiki/Model_Database) and place them in the `ComfyUI\models\upscale_models` directory. I recommend lollipop as it provides a good balanced image that is not too sharp. If you want lots of sharp details, then try the NMKD Superscale or 4x-UltraSharp.
+
+The seed is used by the samplers.
+
+The upscale_by setting is how large you want the final image to be before it runs the last base sampler over the image. A value of 1 will output the original image size. 2 will be 2x the size of the original.
+
+The highres_strength setting allows you to control this. Dial it down if you are still getting scrambled images, or turn it up if you want to add more detail. 
 
 ## Empty Latent Ratio Select SDXL
 
