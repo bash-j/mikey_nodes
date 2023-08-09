@@ -67,7 +67,7 @@ The seed is used by the samplers.
 
 The upscale_by setting is how large you want the final image to be before it runs the last base sampler over the image. A value of 1 will output the original image size. 2 will be 2x the size of the original.
 
-The highres_strength setting allows you to control this. Dial it down if you are still getting scrambled images, or turn it up if you want to add more detail. 
+The highres_strength setting allows you to control this last stage and how much detail it adds. Setting of 1 is the sweet spot I found didn't scramble faces in a few test images. Dial it down if you are still getting scrambled images, or turn it up if you want to add more detail. 
 
 ## Style Conditioner
 
