@@ -70,24 +70,29 @@ The upscale_by setting is how large you want the final image to be before it run
 The highres_strength setting allows you to control this last stage and how much detail it adds. Setting of 1 is the sweet spot I found didn't scramble faces in a few test images. Dial it down if you are still getting scrambled images, or turn it up if you want to add more detail. 
 
 ## Style Conditioner
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/b742b8a4-6ab3-4311-b278-db8bda66b5ce)
 
 This chonky node is for injecting the style prompt into your conditioner by averaging the conditioner passed through the node.
 
 A strength value of 0.5 would be even split between the conditioner passed in and the style selected.
 
 ## Empty Latent Ratio Select SDXL
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/610dae5e-7c86-45fb-893d-06f7ccfe242e)
 
 This node allows you to select from a range of different aspect ratios.
 
 ## Empty Latent Ratio Custom SDXL
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/784d7b92-dfc7-4f79-9c81-272605ab7934)
 
 This node allows you to enter your own aspect ratio or image size from wherever, and it will make it fit under 1024x1024 resolution.
 
 ## Resize Image for SDXL
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/9febf7d4-31dd-4078-9ebf-03d3236f7291)
 
 This node allows you to resize an image to fit into 1024x1024 resolution. Good for Img2Img workflows.
 
 ## Batch Resize Image for SDXL
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/fb5ee831-9895-4901-91fa-fd0771f91a1d)
 
 Given a path to a folder containing images, it will resize all images in the folder to fit the 1024^2 resolution and feed into the workflow. Careful of folders with lots of images!
 
@@ -98,6 +103,13 @@ This node allows you to save an image with the prompt data in the filename.
 The filename will start with a datestamp, then part of the positive prompt.
 
 It will also save the positive prompt and negative prompt to the png data.
+
+## Upscale Tile Calculator
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/6f550f38-3e6a-4659-87fb-92deb5d98460)
+
+Made for the [Ultimate SD Upscaler](https://github.com/ssitu/ComfyUI_UltimateSDUpscale) to help calcuate tile size to evenly fit inside the larger image and not get weird edges.
+
+The resolution is what is suitable for the model you are using, 1.5: 512, 2.1: 768, SDXL Base: 1024, SDXL Refiner: 768
 
 ## Wildcard Processor
 ![image](https://github.com/bash-j/mikey_nodes/assets/3195567/ce62e6d7-1982-4c53-bde1-7569c94322e3)
