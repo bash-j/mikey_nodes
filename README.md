@@ -87,7 +87,7 @@ This node allows you to select from a range of different aspect ratios.
 This node allows you to enter your own aspect ratio or image size from wherever, and it will make it fit under 1024x1024 resolution.
 
 ## Resize Image for SDXL
-![image](https://github.com/bash-j/mikey_nodes/assets/3195567/9febf7d4-31dd-4078-9ebf-03d3236f7291)
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/85cd45ef-933b-4d95-9c73-717b944df7e2)
 
 This node allows you to resize an image to fit into 1024x1024 resolution. Good for Img2Img workflows.
 
