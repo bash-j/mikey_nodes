@@ -8,11 +8,9 @@ import random
 import re
 import sys
 
-import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 from PIL.PngImagePlugin import PngInfo
-from skimage.feature import graycomatrix, graycoprops
 import torch
 import torch.nn.functional as F
 
@@ -1196,43 +1194,42 @@ class StyleConditioner:
 
 def calculate_image_complexity(image):
     pil_image = tensor2pil(image)
-    image = np.array(pil_image)
+    np_image = np.array(pil_image)
 
-    # Convert image to grayscale for edge detection, GLCM, and entropy
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    # 1. Convert image to grayscale for edge detection
+    gray_pil = ImageOps.grayscale(pil_image)
+    gray = np.array(gray_pil)
 
-    # 1. Edge Detection
-    edges = cv2.Canny(gray, 100, 200)
-    edge_density = float(np.sum(edges)) / (image.shape[0] * image.shape[1])
+    # 2. Edge Detection using simple difference method
+    # Edge Detection using simple difference method
+    diff_x = np.diff(gray, axis=1)
+    diff_y = np.diff(gray, axis=0)
 
-    # 2. Texture Analysis using GLCM
-    glcm = graycomatrix(gray, [1], [0], 256, symmetric=True, normed=True)
+    # Ensure same shape
+    min_shape = (min(diff_x.shape[0], diff_y.shape[0]),
+                min(diff_x.shape[1], diff_y.shape[1]))
 
-    max_contrast = 100  # adjust based on your typical range if needed
-    contrast = max_contrast - graycoprops(glcm, 'contrast')[0, 0]
-    contrast = contrast / max_contrast  # Normalize contrast
+    diff_x = diff_x[:min_shape[0], :min_shape[1]]
+    diff_y = diff_y[:min_shape[0], :min_shape[1]]
 
-    dissimilarity = graycoprops(glcm, 'dissimilarity')[0, 0]
+    magnitude = np.sqrt(diff_x**2 + diff_y**2)
 
-    # Normalize dissimilarity (assuming an arbitrary range of 0 to 10, adjust if needed)
-    dissimilarity /= 10
+    threshold = 30  # threshold value after which we consider a pixel as an edge
+    edge_density = np.sum(magnitude > threshold) / magnitude.size
 
     # 3. Color Variability
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    hue_std = np.std(hsv[:, :, 0]) / 180  # Normalize: hue values range from 0 to 180 in OpenCV
-    saturation_std = np.std(hsv[:, :, 1]) / 255  # Normalize: saturation values range from 0 to 255
-    value_std = np.std(hsv[:, :, 2]) / 255  # Normalize: value (brightness) values range from 0 to 255
+    hsv = np_image / 255.0  # Normalize
+    hsv = np.dstack((hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]))
+    hue_std = np.std(hsv[:, :, 0])
+    saturation_std = np.std(hsv[:, :, 1])
+    value_std = np.std(hsv[:, :, 2])
 
     # 4. Entropy
-    hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
-    hist /= hist.sum()
-    entropy = -np.sum(hist*np.log2(hist + np.finfo(float).eps))  # Adding epsilon to avoid log(0)
-    # Normalize entropy assuming an arbitrary range of 0 to 8 (adjust if needed)
-    entropy /= 8
+    hist = np.histogram(gray, bins=256, range=(0,256), density=True)[0]
+    entropy = -np.sum(hist * np.log2(hist + np.finfo(float).eps))
 
-    # Compute a combined complexity score.
-    # You can adjust the weights as per the importance of each feature.
-    complexity = edge_density + contrast + dissimilarity + hue_std + saturation_std + value_std + entropy
+    # Compute a combined complexity score. Adjust the weights if necessary.
+    complexity = edge_density + hue_std + saturation_std + value_std + entropy
 
     return complexity
 
@@ -1253,7 +1250,7 @@ class MikeySampler:
     CATEGORY = 'Mikey/Sampling'
 
     def adjust_start_step(self, image_complexity, hires_strength=1.0):
-        image_complexity /= 10
+        image_complexity /= 24
         if image_complexity > 1:
             image_complexity = 1
         image_complexity = min([0.55, image_complexity]) * hires_strength
