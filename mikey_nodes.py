@@ -9,7 +9,7 @@ import re
 import sys
 
 import numpy as np
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageDraw, ImageFilter
 from PIL.PngImagePlugin import PngInfo
 import torch
 import torch.nn.functional as F
@@ -64,6 +64,18 @@ def find_tile_dimensions(width: int, height: int, multiplier: float, res: int) -
     tile_width = new_width / width_multiples // 1
     tile_height = new_height / height_multiples // 1
     return tile_width, tile_height
+
+def find_tile_dimensions(width: int, height: int, multiplier: float, res: int) -> (int, int):
+    new_width = int(width * multiplier) // 8 * 8
+    new_height = int(height * multiplier) // 8 * 8
+
+    width_multiples = max(1, new_width // res)
+    height_multiples = max(1, new_height // res)
+
+    tile_width = new_width // width_multiples
+    tile_height = new_height // height_multiples
+
+    return int(tile_width), int(tile_height)
 
 def read_ratios():
     p = os.path.dirname(os.path.realpath(__file__))
@@ -120,68 +132,6 @@ def read_styles():
             neg_style[style] = user_data['styles'][style]['negative']
             styles.append(style)
     return styles, pos_style, neg_style
-
-def find_and_replace_wildcards(prompt, offset_seed, debug=False):
-    # wildcards use the __file_name__ syntax with optional |word_to_find
-    wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
-    wildcard_regex = r'(\[(\d+)\$\$)?__((?:[^|_]+_)*[^|_]+)((?:\|[^|]+)*)__\]?'
-    match_strings = []
-    random.seed(offset_seed)
-    offset = offset_seed
-    for full_match, lines_count_str, actual_match, words_to_find_str in re.findall(wildcard_regex, prompt):
-        words_to_find = words_to_find_str.split('|')[1:] if words_to_find_str else None
-        if debug:
-            print(f'Wildcard match: {actual_match}')
-            print(f'Wildcard words to find: {words_to_find}')
-        lines_to_insert = int(lines_count_str) if lines_count_str else 1
-        if debug:
-            print(f'Wildcard lines to insert: {lines_to_insert}')
-        match_parts = actual_match.split('/')
-        if len(match_parts) > 1:
-            wildcard_dir = os.path.join(*match_parts[:-1])
-            wildcard_file = match_parts[-1]
-        else:
-            wildcard_dir = ''
-            wildcard_file = match_parts[0]
-        search_path = os.path.join(wildcard_path, wildcard_dir)
-        file_path = os.path.join(search_path, wildcard_file + '.txt')
-        if not os.path.isfile(file_path) and wildcard_dir == '':
-            file_path = os.path.join(wildcard_path, wildcard_file + '.txt')
-        if os.path.isfile(file_path):
-            if actual_match in match_strings:
-                offset += 1
-            selected_lines = []
-            with open(file_path, 'r', encoding='utf-8') as file:
-                file_lines = file.readlines()
-                num_lines = len(file_lines)
-                if words_to_find:
-                    for i in range(lines_to_insert):
-                        start_idx = (offset + i) % num_lines
-                        for j in range(num_lines):
-                            line_number = (start_idx + j) % num_lines
-                            line = file_lines[line_number].strip()
-                            if any(re.search(r'\b' + re.escape(word) + r'\b', line, re.IGNORECASE) for word in words_to_find):
-                                selected_lines.append(line)
-                                break
-                else:
-                    start_idx = offset % num_lines
-                    for i in range(lines_to_insert):
-                        line_number = (start_idx + i) % num_lines
-                        line = file_lines[line_number].strip()
-                        selected_lines.append(line)
-            if len(selected_lines) == 1:
-                replacement_text = selected_lines[0]
-            else:
-                replacement_text = ','.join(selected_lines)
-            prompt = prompt.replace(full_match, replacement_text, 1)
-            match_strings.append(actual_match)
-            offset += lines_to_insert
-            if debug:
-                print('Wildcard prompt selected: ' + replacement_text)
-        else:
-            if debug:
-                print(f'Wildcard file {wildcard_file}.txt not found in {search_path}')
-    return prompt
 
 def find_and_replace_wildcards(prompt, offset_seed, debug=False):
     # wildcards use the __file_name__ syntax with optional |word_to_find
@@ -606,6 +556,139 @@ class SaveImagesMikey:
             counter += 1
 
         return { "ui": { "images": results } }
+
+class SaveImagesMikeyML:
+    def __init__(self):
+        self.output_dir = folder_paths.get_output_directory()
+        self.type = "output"
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required":
+                    {"images": ("IMAGE", ),
+                     'sub_directory': ("STRING", {'default': ''}),
+                     "filename_text_1": ("STRING", {'default': 'Filename Text 1'}),
+                     "filename_text_2": ("STRING", {'default': 'Filename Text 2'}),
+                     "filename_text_3": ("STRING", {'default': 'Filename Text 3'}),
+                     "filename_separator": ("STRING", {'default': '_'}),
+                     "timestamp": (["true", "false"], {'default': 'true'}),
+                     "counter_type": (["none", "folder", "filename"], {'default': 'folder'}),
+                     "filename_text_1_pos": ("INT", {'default': 0}),
+                     "filename_text_2_pos": ("INT", {'default': 2}),
+                     "filename_text_3_pos": ("INT", {'default': 4}),
+                     "timestamp_pos": ("INT", {'default': 1}),
+                     "timestamp_type": (['job','save_time'], {'default': 'save_time'}),
+                     "counter_pos": ("INT", {'default': 3}),
+                     "extra_metadata": ("STRING", {'default': 'Extra Metadata'}),},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                }
+
+    RETURN_TYPES = ()
+    FUNCTION = "save_images"
+    OUTPUT_NODE = True
+    CATEGORY = "Mikey/Image"
+
+    def _prepare_filename_texts(self, filename_text_1, filename_text_2, filename_text_3):
+        # replace default values with empty strings
+        filename_texts = [filename_text_1, filename_text_2, filename_text_3]
+        default_texts = ['Filename Text 1', 'Filename Text 2', 'Filename Text 3']
+        for i, text in enumerate(filename_texts):
+            if text == default_texts[i]:
+                filename_texts[i] = ''
+            # replace any special characters with nothing
+            filename_texts[i] = re.sub(r'[^a-zA-Z0-9 ]', '', filename_texts[i])
+        return filename_texts
+
+    def _get_initial_counter(self, files, full_output_folder, counter_type, filename_separator, counter_pos, filename_texts):
+        counter = 1
+        if counter_type == "folder":
+            for f in files:
+                if filename_separator in f:
+                    counter = max(counter, int(f.split(filename_separator)[counter_pos]) + 1)
+        elif counter_type == "filename":
+            for f in files:
+                f_split = f.split(filename_separator)
+                # strip .png from strings
+                f_split = [x.replace('.png', '') for x in f_split]
+                matched_texts = all(
+                    filename_texts[i] == f_split[i] for i in range(3) if filename_texts[i]
+                )
+                if matched_texts:
+                    counter += 1
+        return counter
+
+    def _get_next_counter(self, full_output_folder, filename_base, counter):
+        """Checks for the next available counter value."""
+        while True:
+            current_filename = filename_base.format(counter=f"{counter:05}")
+            if not os.path.exists(os.path.join(full_output_folder, f"{current_filename}.png")):
+                return counter
+            counter += 1
+
+    def save_images(self, images, sub_directory, filename_text_1, filename_text_2, filename_text_3,
+                    filename_separator, timestamp, counter_type,
+                    filename_text_1_pos, filename_text_2_pos, filename_text_3_pos,
+                    timestamp_pos, timestamp_type, counter_pos, extra_metadata,
+                    prompt=None, extra_pnginfo=None):
+        positions = [filename_text_1_pos, filename_text_2_pos, filename_text_3_pos, timestamp_pos, counter_pos]
+        if len(positions) != len(set(positions)):
+            raise ValueError("Duplicate position numbers detected. Please ensure all position numbers are unique.")
+
+        full_output_folder = os.path.join(self.output_dir, sub_directory)
+        os.makedirs(full_output_folder, exist_ok=True)
+
+        filename_texts = self._prepare_filename_texts(filename_text_1, filename_text_2, filename_text_3)
+
+        if timestamp == 'true':
+            ts = datetime.datetime.now().strftime("%y%m%d%H%M%S")
+        else:
+            ts = ''
+
+        elements = {
+            filename_text_1_pos: filename_texts[0],
+            filename_text_2_pos: filename_texts[1],
+            filename_text_3_pos: filename_texts[2],
+            timestamp_pos: ts,
+            counter_pos: 'counter' if counter_type != 'none' else None
+        }
+
+        # Construct initial filename without the counter
+        sorted_elements = [elem for _, elem in sorted(elements.items()) if elem]
+        filename_base = filename_separator.join(sorted_elements).replace('counter', '{counter}')
+
+        # Get initial counter value
+        files = os.listdir(full_output_folder)
+        counter = self._get_initial_counter(files, full_output_folder, counter_type, filename_separator, counter_pos, filename_texts)
+
+        results = list()
+        for image in images:
+            i = 255. * image.cpu().numpy()
+            img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
+            metadata = PngInfo()
+            if prompt is not None:
+                metadata.add_text("prompt", json.dumps(prompt, ensure_ascii=False))
+            if extra_pnginfo is not None:
+                for x in extra_pnginfo:
+                    metadata.add_text(x, json.dumps(extra_pnginfo[x], ensure_ascii=False))
+            if extra_metadata:
+                metadata.add_text("extra_metadata", json.dumps(extra_metadata, ensure_ascii=False))
+            # Check and get the next available counter
+            counter = self._get_next_counter(full_output_folder, filename_base, counter)
+            current_filename = filename_base.format(counter=f"{counter:05}")
+            if timestamp_type == 'save_time' and timestamp == 'true':
+                current_timestamp = datetime.datetime.now().strftime("%y%m%d%H%M%S")
+                current_filename = current_filename.replace(ts, current_timestamp)
+                ts = current_timestamp
+
+            img.save(os.path.join(full_output_folder, f"{current_filename}.png"), pnginfo=metadata, compress_level=4)
+            results.append({
+                "filename": f"{current_filename}.png",
+                "subfolder": sub_directory,
+                "type": self.type
+            })
+            counter += 1
+
+        return {"ui": {"images": results}}
 
 class AddMetaData:
     @classmethod
@@ -1243,7 +1326,7 @@ class MikeySampler:
                              "model_name": (folder_paths.get_filename_list("upscale_models"), ),
                              "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
                              "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1}),
-                             "hires_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.1})}}
+                             "hires_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.1}),}}
 
     RETURN_TYPES = ('LATENT',)
     FUNCTION = 'run'
@@ -1257,7 +1340,8 @@ class MikeySampler:
         return min([16, 16 - int(round(image_complexity * 16,0))])
 
     def run(self, seed, base_model, refiner_model, vae, samples, positive_cond_base, negative_cond_base,
-            positive_cond_refiner, negative_cond_refiner, model_name, upscale_by=1.0, hires_strength=1.0):
+            positive_cond_refiner, negative_cond_refiner, model_name, upscale_by=1.0, hires_strength=1.0,
+            upscale_method='normal'):
         image_scaler = ImageScale()
         vaeencoder = VAEEncode()
         vaedecoder = VAEDecode()
@@ -1286,8 +1370,326 @@ class MikeySampler:
         latent = vaeencoder.encode(vae, img)[0]
         # step 3 run base model
         out = common_ksampler(base_model, seed, 16, 9.5, 'dpmpp_2m_sde', 'karras', positive_cond_base, negative_cond_base, latent,
-                                  start_step=start_step, force_full_denoise=True)
+                                start_step=start_step, force_full_denoise=True)
         return out
+
+def match_histograms(source, reference):
+    """
+    Adjust the pixel values of a grayscale image such that its histogram
+    matches that of a target image
+    """
+    src_img = source.convert('YCbCr')
+    ref_img = reference.convert('YCbCr')
+    src_y, src_cb, src_cr = src_img.split()
+    ref_y, ref_cb, ref_cr = ref_img.split()
+
+    src_values = np.asarray(src_y).flatten()
+    ref_values = np.asarray(ref_y).flatten()
+
+    # Compute CDFs
+    src_cdf, bin_centers = np.histogram(src_values, bins=256, density=True, range=(0, 256))
+    src_cdf = np.cumsum(src_cdf)
+    ref_cdf, _ = np.histogram(ref_values, bins=256, density=True, range=(0, 256))
+    ref_cdf = np.cumsum(ref_cdf)
+
+    # Create a mapping from source values to reference values
+    interp_values = np.interp(src_cdf, ref_cdf, bin_centers[:-1])
+
+    # Map the source image to use the new pixel values
+    matched = np.interp(src_values, bin_centers[:-1], interp_values).reshape(src_y.size[::-1])
+    matched_img = Image.fromarray(np.uint8(matched))
+
+    # Merge channels back
+    matched_img = Image.merge('YCbCr', (matched_img, src_cb, src_cr)).convert('RGB')
+    return matched_img
+
+class MikeySamplerTiled:
+    @classmethod
+    def INPUT_TYPES(s):
+
+        return {"required": {"base_model": ("MODEL",), "refiner_model": ("MODEL",), "samples": ("LATENT",), "vae": ("VAE",),
+                             "positive_cond_base": ("CONDITIONING",), "negative_cond_base": ("CONDITIONING",),
+                             "positive_cond_refiner": ("CONDITIONING",), "negative_cond_refiner": ("CONDITIONING",),
+                             "model_name": (folder_paths.get_filename_list("upscale_models"), ),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                             "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1}),
+                             "tiler_denoise": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.05}),
+                             "tiler_model": (["base", "refiner"], {"default": "base"}),}}
+
+    RETURN_TYPES = ('IMAGE', 'IMAGE',)
+    RETURN_NAMES = ('tiled_image', 'upscaled_image',)
+    FUNCTION = 'run'
+    CATEGORY = 'Mikey/Sampling'
+
+    def divide_into_tiles_with_padding(self, image, tile_width, tile_height, padding=64):
+        tiles = []
+        positions = []
+
+        width, height = image.size
+
+        width_overflow = width % tile_width
+        height_overflow = height % tile_height
+
+        width_adjustment = width_overflow // (width // tile_width)
+        height_adjustment = height_overflow // (height // tile_height)
+
+        x_adjusted, y_adjusted = 0, 0
+
+        for y in range(0, height, tile_height):
+            x_adjusted = 0
+            if y_adjusted < height_overflow:
+                tile_height_adjusted = tile_height + height_adjustment
+                y_adjusted += 1
+            else:
+                tile_height_adjusted = tile_height
+
+            for x in range(0, width, tile_width):
+                # Determine the adjustment based on the current iteration
+                if x_adjusted < width_overflow:
+                    tile_width_adjusted = tile_width + width_adjustment
+                    x_adjusted += 1
+                else:
+                    tile_width_adjusted = tile_width
+
+                # Define box with selective padding
+                left_padding = padding if x != 0 else 0
+                upper_padding = padding if y != 0 else 0
+                right_padding = padding if x + tile_width_adjusted < width else 0
+                lower_padding = padding if y + tile_height_adjusted < height else 0
+
+                left = max(0, x - left_padding)
+                upper = max(0, y - upper_padding)
+                right = min(width, x + tile_width_adjusted + right_padding)
+                lower = min(height, y + tile_height_adjusted + lower_padding)
+
+                tile = image.crop((left, upper, right, lower))
+
+                # Resize the cropped tile to maintain uniform tile dimensions
+                new_width = tile_width + left_padding + right_padding
+                new_height = tile_height + upper_padding + lower_padding
+                tile = tile.resize((new_width, new_height))
+
+                tiles.append(tile)
+                positions.append((x, y))
+
+        return tiles, positions
+
+    def divide_into_tiles_with_offset(self, image, tile_width, tile_height, padding=64, offset=None):
+        tiles = []
+        positions = []
+
+        width, height = image.size
+
+        # If offset isn't given, just use the tile width/height as usual (i.e., no overlap).
+        if offset is None:
+            offset = tile_width  # For the x axis
+            offset_y = tile_height  # For the y axis
+        else:
+            offset_y = offset  # If offset is given, use it for both axes
+
+        for y in range(0, height - tile_height + 1, offset_y):  # Subtract tile height to ensure last tile doesn't exceed image bounds
+            for x in range(0, width - tile_width + 1, offset):  # Similarly subtract tile width here
+                left_padding = padding if x != 0 else 0
+                upper_padding = padding if y != 0 else 0
+                right_padding = padding if x + tile_width < width else 0
+                lower_padding = padding if y + tile_height < height else 0
+
+                left = max(0, x - left_padding)
+                upper = max(0, y - upper_padding)
+                right = min(width, x + tile_width + right_padding)
+                lower = min(height, y + tile_height + lower_padding)
+
+                tile = image.crop((left, upper, right, lower))
+
+                new_width = tile_width + left_padding + right_padding
+                new_height = tile_height + upper_padding + lower_padding
+                tile = tile.resize((new_width, new_height))
+
+                tiles.append(tile)
+                positions.append((x, y))
+
+        return tiles, positions
+
+    def crop_tile_with_padding(self, base_image, tile, position, padding=64):
+        # can't crop off every side or you will end up with a smaller tile than you started with
+        # padding is not added to every side in the first place
+        x, y = position
+        left_padding = padding if x != 0 else 0
+        upper_padding = padding if y != 0 else 0
+        right_padding = padding if x + tile.width > base_image.width else 0
+        lower_padding = padding if y + tile.height > base_image.height else 0
+
+        cropped_tile = tile.crop((left_padding, upper_padding, tile.width - right_padding, tile.height - lower_padding))
+        return cropped_tile
+
+    def feather_padded_tile(self, base_image, tile, position, padding=64, width=16):
+        x, y = position
+
+        # Check for each side if it should be feathered
+        left_feather = x != 0
+        right_feather = x + tile.width - padding * 2 < base_image.width
+        top_feather = y != 0
+        bottom_feather = y + tile.height - padding * 2 < base_image.height
+
+        tile = tile.convert("RGBA")
+        mask = Image.new('L', tile.size, 255)
+        draw = ImageDraw.Draw(mask)
+
+        # Horizontal gradient
+        for x in range(width):
+            gradient_value = int(255 * (x / width))
+            if left_feather:
+                draw.line([(x, 0), (x, tile.height)], fill=gradient_value)
+            if right_feather:
+                draw.line([(tile.width - x - 1, 0), (tile.width - x - 1, tile.height)], fill=gradient_value)
+
+        # Vertical gradient
+        for y in range(width):
+            gradient_value = int(255 * (y / width))
+            if top_feather:
+                draw.line([(0, y), (tile.width, y)], fill=gradient_value)
+            if bottom_feather:
+                draw.line([(0, tile.height - y - 1), (tile.width, tile.height - y - 1)], fill=gradient_value)
+
+        tile.putalpha(mask)
+        return tile
+
+    def overlay_tiles(self, base_image, tile, position, padding=64, feathering_width=16):
+        """
+        Overlays a tile on top of a base image.
+        The function assumes PIL.Image objects.
+        """
+        x, y = position
+
+        # Define crop boundaries based on the position of the tile.
+        left_padding = padding if x != 0 else 0
+        upper_padding = padding if y != 0 else 0
+        right_padding = padding if x + tile.width > base_image.width else 0
+        lower_padding = padding if y + tile.height > base_image.height else 0
+
+        cropped_tile = tile.crop((left_padding, upper_padding, tile.width - right_padding, tile.height - lower_padding))
+        # feather cropped tile
+        cropped_tile = self.feather_padded_tile(base_image, cropped_tile, position, padding=padding, width=feathering_width)
+        # paste cropped tile that used to be padded onto base image
+        base_image.paste(cropped_tile, position, cropped_tile)
+        return base_image
+
+    def overlay_offset_tiles(self, base_image, tiles, positions, padding=64, feathering_width=32):
+        """
+        Overlays a list of tiles on top of a base image.
+        Assumes tiles have an offset and can overlap.
+        The function assumes PIL.Image objects.
+        """
+        for tile, position in zip(tiles, positions):
+            # Process each tile as before
+            cropped_tile = self.crop_tile_with_padding(base_image, tile, position, padding=padding)
+            feathered_tile = self.feather_padded_tile(base_image, cropped_tile, position, padding=padding, width=feathering_width)
+
+            # Paste feathered tile onto the base image
+            base_image.paste(feathered_tile, position, feathered_tile)
+
+        return base_image
+
+    def phase_one(self, base_model, refiner_model, samples, positive_cond_base, negative_cond_base,
+                  positive_cond_refiner, negative_cond_refiner, upscale_by, model_name, seed, vae):
+        image_scaler = ImageScale()
+        vaedecoder = VAEDecode()
+        uml = UpscaleModelLoader()
+        upscale_model = uml.load_model(model_name)[0]
+        iuwm = ImageUpscaleWithModel()
+        # step 1 run base model
+        sample1 = common_ksampler(base_model, seed, 25, 6.5, 'dpmpp_2s_ancestral', 'simple', positive_cond_base, negative_cond_base, samples,
+                                  start_step=0, last_step=18, force_full_denoise=False)[0]
+        # step 2 run refiner model
+        sample2 = common_ksampler(refiner_model, seed, 30, 3.5, 'dpmpp_2m', 'simple', positive_cond_refiner, negative_cond_refiner, sample1,
+                                  disable_noise=True, start_step=21, force_full_denoise=True)[0]
+        # step 3 upscale image using a simple AI image upscaler
+        pixels = vaedecoder.decode(vae, sample2)[0]
+        org_width, org_height = pixels.shape[2], pixels.shape[1]
+        img = iuwm.upscale(upscale_model, image=pixels)[0]
+        upscaled_width, upscaled_height = int(org_width * upscale_by // 8 * 8), int(org_height * upscale_by // 8 * 8)
+        img = image_scaler.upscale(img, 'nearest-exact', upscaled_width, upscaled_height, 'center')[0]
+        return img, upscaled_width, upscaled_height
+
+    def tiler(self, base_model, refiner_model, vae, img, positive_cond_base, negative_cond_base,
+              positive_cond_refiner, negative_cond_refiner, seed, upscaled_width, upscaled_height,
+              tiler_denoise, tiler_model, tiler_mode='padding', offset_amount=1.3):
+        vaeencoder = VAEEncode()
+        vaedecoder = VAEDecode()
+        # Tiled upscaler logic  (more advanced upscaling method)
+        pil_img = tensor2pil(img)
+        tile_width, tile_height = find_tile_dimensions(upscaled_width, upscaled_height, 1.0, 1024)
+        if tiler_mode == 'padding':
+            tiles, positions = self.divide_into_tiles_with_padding(pil_img, tile_width, tile_height, 64)
+        else:
+            tiles, positions = self.divide_into_tiles_with_offset(pil_img, tile_width, tile_height, 64, offset=int(tile_width // offset_amount))
+        # Phase 1: Encoding the tiles
+        latent_tiles = []
+        for tile in tiles:
+            tile_img = pil2tensor(tile)
+            tile_latent = vaeencoder.encode(vae, tile_img)[0]
+            latent_tiles.append(tile_latent)
+        # Phase 2: Sampling using the encoded latents
+        start_step = int(20 - (20 * tiler_denoise))
+        resampled_tiles = []
+        if tiler_model == 'base':
+            for tile_latent in latent_tiles:
+                tile_resampled = common_ksampler(base_model, seed, 20, 7, 'dpmpp_2m_sde', 'karras',
+                                                positive_cond_base, negative_cond_base, tile_latent,
+                                                start_step=start_step, force_full_denoise=True)[0]
+                resampled_tiles.append(tile_resampled)
+        else:
+            for tile_latent in latent_tiles:
+                tile_resampled = common_ksampler(refiner_model, seed, 20, 7, 'dpmpp_2m_sde', 'karras',
+                                                positive_cond_refiner, negative_cond_refiner, tile_latent,
+                                                start_step=start_step, force_full_denoise=True)[0]
+                resampled_tiles.append(tile_resampled)
+        # Phase 3: Decoding the sampled tiles and feathering
+        processed_tiles = []
+        for tile_resampled, original_tile, position in zip(resampled_tiles, tiles, positions):
+            # Decode the tile
+            tile_img = vaedecoder.decode(vae, tile_resampled)[0]
+            tile_pil = tensor2pil(tile_img)
+            # Histogram match with original tile
+            matched_tile = match_histograms(tile_pil, original_tile)
+            processed_tiles.append(matched_tile)
+        # stitch the tiles back together with overlay
+        #white_img = Image.new('RGB', (upscaled_width, upscaled_height), (255, 255, 255))
+        if tiler_mode == 'padding':
+            final_image = pil_img
+            for tile, position in zip(processed_tiles, positions):
+                final_image = self.overlay_tiles(final_image, tile, position, 64)
+            # second pass
+            final_image = match_histograms(pil_img, final_image)
+            for tile, position in zip(processed_tiles, positions):
+                final_image = self.overlay_tiles(final_image, tile, position, 64)
+            final_image = pil2tensor(final_image)
+        else:
+            final_image = pil_img
+            final_image = self.overlay_offset_tiles(final_image, processed_tiles, positions)
+            # second pass
+            final_image = match_histograms(pil_img, final_image)
+            final_image = self.overlay_offset_tiles(final_image, processed_tiles, positions)
+            final_image = pil2tensor(final_image)
+        return final_image
+
+    def run(self, seed, base_model, refiner_model, vae, samples, positive_cond_base, negative_cond_base,
+            positive_cond_refiner, negative_cond_refiner, model_name, upscale_by=1.0, tiler_denoise=0.25,
+            upscale_method='normal', tiler_model='base'):
+        # phase 1: run base, refiner, then upscaler model
+        img, upscaled_width, upscaled_height = self.phase_one(base_model, refiner_model, samples, positive_cond_base, negative_cond_base,
+                                                              positive_cond_refiner, negative_cond_refiner, upscale_by, model_name, seed, vae)
+        # phase 2: run tiler
+        tiled_image = self.tiler(base_model, refiner_model, vae, img, positive_cond_base, negative_cond_base,
+                                 positive_cond_refiner, negative_cond_refiner, seed, upscaled_width, upscaled_height,
+                                 tiler_denoise, tiler_model, tiler_mode='offset', offset_amount=1)
+        tiled_image = self.tiler(base_model, refiner_model, vae, tiled_image, positive_cond_base, negative_cond_base,
+                                 positive_cond_refiner, negative_cond_refiner, seed, upscaled_width, upscaled_height,
+                                 .4, tiler_model, tiler_mode='offset', offset_amount=2)
+        tiled_image = self.tiler(base_model, refiner_model, vae, tiled_image, positive_cond_base, negative_cond_base,
+                                 positive_cond_refiner, negative_cond_refiner, seed, upscaled_width, upscaled_height,
+                                 .2, tiler_model, tiler_mode='offset', offset_amount=1)
+        return (tiled_image, img)
 
 class PromptWithSDXL:
     @classmethod
@@ -1379,6 +1781,7 @@ NODE_CLASS_MAPPINGS = {
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
     'Empty Latent Ratio Custom SDXL': EmptyLatentRatioCustom,
     'Save Image With Prompt Data': SaveImagesMikey,
+    'Save Images Mikey': SaveImagesMikeyML,
     'Resize Image for SDXL': ResizeImageSDXL,
     'Upscale Tile Calculator': UpscaleTileCalculator,
     'Batch Resize Image for SDXL': BatchResizeImageSDXL,
@@ -1388,6 +1791,7 @@ NODE_CLASS_MAPPINGS = {
     'Prompt With SDXL': PromptWithSDXL,
     'Style Conditioner': StyleConditioner,
     'Mikey Sampler': MikeySampler,
+    'Mikey Sampler Tiled': MikeySamplerTiled,
     'AddMetaData': AddMetaData,
     'SaveMetaData': SaveMetaData,
     'HaldCLUT ': HaldCLUT,
@@ -1398,7 +1802,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Wildcard Processor': 'Wildcard Processor (Mikey)',
     'Empty Latent Ratio Select SDXL': 'Empty Latent Ratio Select SDXL (Mikey)',
     'Empty Latent Ratio Custom SDXL': 'Empty Latent Ratio Custom SDXL (Mikey)',
-    'Save Image With Prompt Data': 'Save Image With Prompt Data (Mikey)',
+    'Save Images With Prompt Data': 'Save Image With Prompt Data (Mikey)',
+    'Save Images Mikey': 'Save Images Mikey (Mikey)',
     'Resize Image for SDXL': 'Resize Image for SDXL (Mikey)',
     'Upscale Tile Calculator': 'Upscale Tile Calculator (Mikey)',
     'Batch Resize Image for SDXL': 'Batch Resize Image for SDXL (Mikey)',
@@ -1408,6 +1813,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Prompt With SDXL': 'Prompt With SDXL (Mikey)',
     'Style Conditioner': 'Style Conditioner (Mikey)',
     'Mikey Sampler': 'Mikey Sampler',
+    'Mikey Sampler Tiled': 'Mikey Sampler Tiled',
     'AddMetaData': 'AddMetaData (Mikey)',
     'SaveMetaData': 'SaveMetaData (Mikey)',
     'HaldCLUT': 'HaldCLUT (Mikey)',
