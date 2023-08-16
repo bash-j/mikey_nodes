@@ -169,8 +169,10 @@ def find_and_replace_wildcards(prompt, offset_seed, debug=False):
         if not os.path.isfile(file_path) and wildcard_dir == '':
             file_path = os.path.join(wildcard_path, wildcard_file + '.txt')
         if os.path.isfile(file_path):
+            store_offset = None
             if actual_match in match_strings:
-                offset += 1
+                store_offset = offset
+                offset = random.randint(0, 1000000)
             selected_lines = []
             with open(file_path, 'r', encoding='utf-8') as file:
                 file_lines = file.readlines()
@@ -196,6 +198,9 @@ def find_and_replace_wildcards(prompt, offset_seed, debug=False):
                 replacement_text = ','.join(selected_lines)
             new_prompt += replacement_text
             match_strings.append(actual_match)
+            if store_offset is not None:
+                offset = store_offset
+                store_offset = None
             offset += lines_to_insert
             if debug:
                 print('Wildcard prompt selected: ' + replacement_text)
@@ -597,6 +602,14 @@ class SaveImagesMikeyML:
                 filename_texts[i] = ''
             # replace any special characters with nothing
             filename_texts[i] = re.sub(r'[^a-zA-Z0-9 ]', '', filename_texts[i])
+        # need to make sure the total filelength name is under 256 characters including the .png, separator, and counter
+        # if the total length is over 256 characters, truncate the longest text to fit under 250 characters total length
+        total_length = len(filename_texts[0]) + len(filename_texts[1]) + len(filename_texts[2]) + 5 + 5 + 12
+        if total_length > 120:
+            longest_text = max(filename_texts, key=len)
+            longest_text_idx = filename_texts.index(longest_text)
+            text_length_without_longest = total_length - len(longest_text)
+            filename_texts[longest_text_idx] = longest_text[0:120 - text_length_without_longest]
         return filename_texts
 
     def _get_initial_counter(self, files, full_output_folder, counter_type, filename_separator, counter_pos, filename_texts):
