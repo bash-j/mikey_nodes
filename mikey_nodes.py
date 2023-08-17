@@ -470,11 +470,11 @@ class BatchResizeImageSDXL(ResizeImageSDXL):
                 images.append(img)
         return (images,)
 
-class BatchCropImageSDXL:
+class BatchCropImage:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {"image_directory": ("STRING", {"multiline": False, "placeholder": "Image Directory"}),
-                             "crop_amount": ("FLOAT", {"default": 0.5})}}
+                             "crop_amount": ("FLOAT", {"default": 0.05})}}
 
     RETURN_TYPES = ('IMAGE',)
     RETURN_NAMES = ('image',)
@@ -1805,6 +1805,20 @@ class UpscaleTileCalculator:
         print('Tile width: ' + str(tile_width), 'Tile height: ' + str(tile_height))
         return (image, tile_width, tile_height)
 
+class IntegerAndString:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {'required': {'seed': ('INT', {'default': 0, 'min': 0, 'max': 0xffffffffffffffff})}}
+
+    RETURN_TYPES = ('INT','STRING')
+    RETURN_NAMES = ('seed','seed_string')
+    FUNCTION = 'output'
+    CATEGORY = 'Mikey'
+
+    def output(self, seed):
+        seed_string = str(seed)
+        return (seed, seed_string,)
+
 NODE_CLASS_MAPPINGS = {
     'Wildcard Processor': WildcardProcessor,
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
@@ -1814,6 +1828,7 @@ NODE_CLASS_MAPPINGS = {
     'Resize Image for SDXL': ResizeImageSDXL,
     'Upscale Tile Calculator': UpscaleTileCalculator,
     'Batch Resize Image for SDXL': BatchResizeImageSDXL,
+    'Batch Crop Image': BatchCropImage,
     'Prompt With Style': PromptWithStyle,
     'Prompt With Style V2': PromptWithStyleV2,
     'Prompt With Style V3': PromptWithStyleV3,
@@ -1824,6 +1839,7 @@ NODE_CLASS_MAPPINGS = {
     'AddMetaData': AddMetaData,
     'SaveMetaData': SaveMetaData,
     'HaldCLUT ': HaldCLUT,
+    'Seed String': IntegerAndString,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -1833,6 +1849,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Save Images With Prompt Data': 'Save Image With Prompt Data (Mikey)',
     'Save Images Mikey': 'Save Images Mikey (Mikey)',
     'Resize Image for SDXL': 'Resize Image for SDXL (Mikey)',
+    'Batch Crop Image': 'Batch Crop Image (Mikey)',
     'Upscale Tile Calculator': 'Upscale Tile Calculator (Mikey)',
     'Batch Resize Image for SDXL': 'Batch Resize Image for SDXL (Mikey)',
     'Prompt With Style V3': 'Prompt With Style (Mikey)',
@@ -1845,4 +1862,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'AddMetaData': 'AddMetaData (Mikey)',
     'SaveMetaData': 'SaveMetaData (Mikey)',
     'HaldCLUT': 'HaldCLUT (Mikey)',
+    'Seed String': 'Seed String (Mikey)',
 }
