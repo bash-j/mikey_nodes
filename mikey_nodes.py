@@ -453,6 +453,8 @@ class RatioAdvanced:
                               "target_fit_size": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
                               "crop_w": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
                               "crop_h": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
+                              "use_preset_seed": (['true','false'], {"default": 'false'}),
+                              "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
                               }}
 
     RETURN_TYPES = ('INT', 'INT', # latent
@@ -481,8 +483,15 @@ class RatioAdvanced:
     def calculate(self, preset, select_latent_ratio, custom_latent_w, custom_latent_h,
                   select_cte_ratio, cte_w, cte_h, cte_mult, cte_res, cte_fit_size,
                   select_target_ratio, target_w, target_h, target_mult, target_res, target_fit_size,
-                  crop_w, crop_h):
-        # first check if ratio preset is selected
+                  crop_w, crop_h, use_preset_seed, seed):
+        # check if use_preset_seed is true
+        if use_preset_seed == 'true' and len(self.ratio_presets) > 1:
+            # seed is a randomly generated number that can be much larger than the number of presets
+            # we use the seed to select a preset
+            offset = seed % len(self.ratio_presets - 1)
+            presets = [p for p in self.ratio_presets if p != 'none']
+            preset = presets[offset]
+        # check if ratio preset is selected
         if preset != 'none':
             latent_width = self.ratio_config[preset]['custom_latent_w']
             latent_height = self.ratio_config[preset]['custom_latent_h']
