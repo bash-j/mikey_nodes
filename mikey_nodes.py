@@ -501,6 +501,23 @@ class RatioAdvanced:
             target_h = self.ratio_config[preset]['target_h']
             crop_w = self.ratio_config[preset]['crop_w']
             crop_h = self.ratio_config[preset]['crop_h']
+            """
+            example user_ratio_presets.json
+            {
+                "ratio_presets": {
+                    "all_1024": {
+                        "custom_latent_w": 1024,
+                        "custom_latent_h": 1024,
+                        "cte_w": 1024,
+                        "cte_h": 1024,
+                        "target_w": 1024,
+                        "target_h": 1024,
+                        "crop_w": 0,
+                        "crop_h": 0
+                    },
+                }
+            }
+            """
             return (latent_width, latent_height,
                     cte_w, cte_h,
                     target_w, target_h,

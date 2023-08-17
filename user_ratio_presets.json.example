@@ -1,0 +1,14 @@
+{
+    "ratio_presets": {
+        "all_1024": {
+            "custom_latent_w": 1024,
+            "custom_latent_h": 1024,
+            "cte_w": 1024,
+            "cte_h": 1024,
+            "target_w": 1024,
+            "target_h": 1024,
+            "crop_w": 0,
+            "crop_h": 0
+        }
+    }
+}
