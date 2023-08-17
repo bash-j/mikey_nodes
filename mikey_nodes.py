@@ -133,6 +133,16 @@ def read_styles():
             styles.append(style)
     return styles, pos_style, neg_style
 
+def read_ratio_presets():
+    file_path = os.path.join(folder_paths.base_path, 'user_ratio_presets.json')
+    if os.path.isfile(file_path):
+        with open(file_path, 'r') as file:
+            data = json.load(file)
+        ratio_presets = list(data['ratio_presets'].keys())
+        return ratio_presets, data['ratio_presets']
+    else:
+        return ['none'], {'none': None}
+
 def find_and_replace_wildcards(prompt, offset_seed, debug=False):
     # wildcards use the __file_name__ syntax with optional |word_to_find
     wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
@@ -415,6 +425,121 @@ class EmptyLatentRatioCustom:
         latent = torch.zeros([batch_size, 4, h // 8, w // 8])
         return ({"samples":latent}, )
 
+class RatioAdvanced:
+    @classmethod
+    def INPUT_TYPES(s):
+        s.ratio_sizes, s.ratio_dict = read_ratios()
+        default_ratio = s.ratio_sizes[0]
+        # prepend 'custom' to ratio_sizes
+        s.ratio_sizes.insert(0, 'custom')
+        s.ratio_presets, s.ratio_config = read_ratio_presets()
+        if 'none' not in s.ratio_presets:
+            s.ratio_presets.append('none')
+        return {"required": { "preset": (s.ratio_presets, {"default": "none"}),
+                              "select_latent_ratio": (s.ratio_sizes, {'default': default_ratio}),
+                              "custom_latent_w": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
+                              "custom_latent_h": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
+                              "select_cte_ratio": (s.ratio_sizes, {'default': default_ratio}),
+                              "cte_w": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
+                              "cte_h": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
+                              "cte_mult": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 100.0, "step": 0.01}),
+                              "cte_res": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
+                              "cte_fit_size": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
+                              "select_target_ratio": (s.ratio_sizes, {'default': default_ratio}),
+                              "target_w": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
+                              "target_h": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
+                              "target_mult": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 100.0, "step": 0.01}),
+                              "target_res": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
+                              "target_fit_size": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
+                              "crop_w": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
+                              "crop_h": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
+                              }}
+
+    RETURN_TYPES = ('INT', 'INT', # latent
+                    'INT', 'INT', # clip text encode
+                    'INT', 'INT', # target
+                    'INT', 'INT') # crop
+    RETURN_NAMES = ('latent_w', 'latent_h',
+                    'cte_w', 'cte_h',
+                    'target_w', 'target_h',
+                    'crop_w', 'crop_h')
+    CATEGORY = 'Mikey/Utils'
+    FUNCTION = 'calculate'
+
+    def mult(self, width, height, mult):
+        return int(width * mult), int(height * mult)
+
+    def fit(self, width, height, fit_size):
+        if width > height:
+            return fit_size, int(height * fit_size / width)
+        else:
+            return int(width * fit_size / height), fit_size
+
+    def res(self, width, height, res):
+        return find_latent_size(width, height, res)
+
+    def calculate(self, preset, select_latent_ratio, custom_latent_w, custom_latent_h,
+                  select_cte_ratio, cte_w, cte_h, cte_mult, cte_res, cte_fit_size,
+                  select_target_ratio, target_w, target_h, target_mult, target_res, target_fit_size,
+                  crop_w, crop_h):
+        # first check if ratio preset is selected
+        if preset != 'none':
+            latent_width = self.ratio_config[preset]['custom_latent_w']
+            latent_height = self.ratio_config[preset]['custom_latent_h']
+            cte_w = self.ratio_config[preset]['cte_w']
+            cte_h = self.ratio_config[preset]['cte_h']
+            target_w = self.ratio_config[preset]['target_w']
+            target_h = self.ratio_config[preset]['target_h']
+            crop_w = self.ratio_config[preset]['crop_w']
+            crop_h = self.ratio_config[preset]['crop_h']
+            return (latent_width, latent_height,
+                    cte_w, cte_h,
+                    target_w, target_h,
+                    crop_w, crop_h)
+        # if no preset is selected, check if custom latent ratio is selected
+        if select_latent_ratio != 'custom':
+            latent_width = self.ratio_dict[select_latent_ratio]["width"]
+            latent_height = self.ratio_dict[select_latent_ratio]["height"]
+        else:
+            latent_width = custom_latent_w
+            latent_height = custom_latent_h
+        # check if cte ratio is selected
+        if select_cte_ratio != 'custom':
+            cte_w = self.ratio_dict[select_cte_ratio]["width"]
+            cte_h = self.ratio_dict[select_cte_ratio]["height"]
+        else:
+            cte_w = cte_w
+            cte_h = cte_h
+        # check if cte_mult not 0
+        if cte_mult != 0.0:
+            cte_w, cte_h = self.mult(cte_w, cte_h, cte_mult)
+        # check if cte_res not 0
+        if cte_res != 0:
+            cte_w, cte_h = self.res(cte_w, cte_h, cte_res)
+        # check if cte_fit_size not 0
+        if cte_fit_size != 0:
+            cte_w, cte_h = self.fit(cte_w, cte_h, cte_fit_size)
+        # check if target ratio is selected
+        if select_target_ratio != 'custom':
+            target_w = self.ratio_dict[select_target_ratio]["width"]
+            target_h = self.ratio_dict[select_target_ratio]["height"]
+        else:
+            target_w = target_w
+            target_h = target_h
+        # check if target_mult not 0
+        if target_mult != 0.0:
+            target_w, target_h = self.mult(target_w, target_h, target_mult)
+        # check if target_res not 0
+        if target_res != 0:
+            target_w, target_h = self.res(target_w, target_h, target_res)
+        # check if target_fit_size not 0
+        if target_fit_size != 0:
+            target_w, target_h = self.fit(target_w, target_h, target_fit_size)
+        return (latent_width, latent_height,
+                cte_w, cte_h,
+                target_w, target_h,
+                crop_w, crop_h)
+
 class ResizeImageSDXL:
     crop_methods = ["disabled", "center"]
     upscale_methods = ["nearest-exact", "bilinear", "area", "bicubic"]
@@ -648,9 +773,16 @@ class SaveImagesMikeyML:
     def _get_initial_counter(self, files, full_output_folder, counter_type, filename_separator, counter_pos, filename_texts):
         counter = 1
         if counter_type == "folder":
-            for f in files:
-                if filename_separator in f:
-                    counter = max(counter, int(f.split(filename_separator)[counter_pos]) + 1)
+            if files:
+                for f in files:
+                    if filename_separator in f:
+                        try:
+                            counter = max(counter, int(f.split(filename_separator)[counter_pos]) + 1)
+                        except:
+                            counter = 1
+                            break
+            else:
+                counter = 1
         elif counter_type == "filename":
             for f in files:
                 f_split = f.split(filename_separator)
@@ -735,6 +867,29 @@ class SaveImagesMikeyML:
             counter += 1
 
         return {"ui": {"images": results}}
+
+class SaveImageNoDisplay(SaveImagesMikeyML):
+    # inherits from SaveImagesMikeyML
+    # only difference is we are not going to output anything to the UI
+    def __init__(self):
+        super().__init__()
+
+    RETURN_TYPES = ()
+    FUNCTION = "save_images_no_display"
+    OUTPUT_NODE = True
+    CATEGORY = "Mikey/Image"
+
+    def save_images_no_display(self, images, sub_directory, filename_text_1, filename_text_2, filename_text_3,
+                    filename_separator, timestamp, counter_type,
+                    filename_text_1_pos, filename_text_2_pos, filename_text_3_pos,
+                    timestamp_pos, timestamp_type, counter_pos, extra_metadata,
+                    prompt=None, extra_pnginfo=None):
+        self.save_images(images, sub_directory, filename_text_1, filename_text_2, filename_text_3,
+                    filename_separator, timestamp, counter_type,
+                    filename_text_1_pos, filename_text_2_pos, filename_text_3_pos,
+                    timestamp_pos, timestamp_type, counter_pos, extra_metadata,
+                    prompt, extra_pnginfo)
+        return (None,)
 
 class AddMetaData:
     @classmethod
@@ -1823,8 +1978,10 @@ NODE_CLASS_MAPPINGS = {
     'Wildcard Processor': WildcardProcessor,
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
     'Empty Latent Ratio Custom SDXL': EmptyLatentRatioCustom,
+    'Ratio Advanced': RatioAdvanced,
     'Save Image With Prompt Data': SaveImagesMikey,
     'Save Images Mikey': SaveImagesMikeyML,
+    'Save Images No Display': SaveImageNoDisplay,
     'Resize Image for SDXL': ResizeImageSDXL,
     'Upscale Tile Calculator': UpscaleTileCalculator,
     'Batch Resize Image for SDXL': BatchResizeImageSDXL,
@@ -1846,8 +2003,10 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Wildcard Processor': 'Wildcard Processor (Mikey)',
     'Empty Latent Ratio Select SDXL': 'Empty Latent Ratio Select SDXL (Mikey)',
     'Empty Latent Ratio Custom SDXL': 'Empty Latent Ratio Custom SDXL (Mikey)',
+    'Ratio Advanced': 'Ratio Advanced (Mikey)',
     'Save Images With Prompt Data': 'Save Image With Prompt Data (Mikey)',
     'Save Images Mikey': 'Save Images Mikey (Mikey)',
+    'Save Images No Display': 'Save Images No Display (Mikey)',
     'Resize Image for SDXL': 'Resize Image for SDXL (Mikey)',
     'Batch Crop Image': 'Batch Crop Image (Mikey)',
     'Upscale Tile Calculator': 'Upscale Tile Calculator (Mikey)',
