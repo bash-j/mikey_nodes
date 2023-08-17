@@ -566,6 +566,38 @@ class RatioAdvanced:
                 target_w, target_h,
                 crop_w, crop_h)
 
+class INTtoSTRING:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"int_": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                             "use_commas": (['true','false'], {"default": 'false'})}}
+
+    RETURN_TYPES = ('STRING',)
+    FUNCTION = 'convert'
+    CATEGORY = 'Mikey/Utils'
+
+    def convert(self, int_, use_commas):
+        if use_commas == 'true':
+            return (f'{int_:,}', )
+        else:
+            return (f'{int_}', )
+
+class FLOATtoSTRING:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"float_": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1000000.0}),
+                             "use_commas": (['true','false'], {"default": 'false'})}}
+
+    RETURN_TYPES = ('STRING',)
+    FUNCTION = 'convert'
+    CATEGORY = 'Mikey/Utils'
+
+    def convert(self, float_, use_commas):
+        if use_commas == 'true':
+            return (f'{float_:,}', )
+        else:
+            return (f'{float_}', )
+
 class ResizeImageSDXL:
     crop_methods = ["disabled", "center"]
     upscale_methods = ["nearest-exact", "bilinear", "area", "bicubic"]
@@ -2005,6 +2037,8 @@ NODE_CLASS_MAPPINGS = {
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
     'Empty Latent Ratio Custom SDXL': EmptyLatentRatioCustom,
     'Ratio Advanced': RatioAdvanced,
+    'Int to String': INTtoSTRING,
+    'Float to String': FLOATtoSTRING,
     'Save Image With Prompt Data': SaveImagesMikey,
     'Save Images Mikey': SaveImagesMikeyML,
     'Save Images No Display': SaveImageNoDisplay,
@@ -2030,6 +2064,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Empty Latent Ratio Select SDXL': 'Empty Latent Ratio Select SDXL (Mikey)',
     'Empty Latent Ratio Custom SDXL': 'Empty Latent Ratio Custom SDXL (Mikey)',
     'Ratio Advanced': 'Ratio Advanced (Mikey)',
+    'Int to String': 'Int to String (Mikey)',
+    'Float to String': 'Float to String (Mikey)',
     'Save Images With Prompt Data': 'Save Image With Prompt Data (Mikey)',
     'Save Images Mikey': 'Save Images Mikey (Mikey)',
     'Save Images No Display': 'Save Images No Display (Mikey)',
