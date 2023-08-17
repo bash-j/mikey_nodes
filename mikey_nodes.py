@@ -29,7 +29,7 @@ module = importlib.util.module_from_spec(spec)
 sys.modules[module_name] = module
 spec.loader.exec_module(module)
 from nodes_upscale_model import UpscaleModelLoader, ImageUpscaleWithModel
-from comfy.model_management import unload_model, soft_empty_cache
+from comfy.model_management import soft_empty_cache
 from nodes import LoraLoader, ConditioningAverage, common_ksampler, ImageScale, VAEEncode, VAEDecode
 import comfy.utils
 from comfy_extras.chainner_models import model_loading
@@ -1805,23 +1805,6 @@ class UpscaleTileCalculator:
         print('Tile width: ' + str(tile_width), 'Tile height: ' + str(tile_height))
         return (image, tile_width, tile_height)
 
-""" Deprecated Nodes """
-
-class VAEDecode6GB:
-    """ deprecated. update comfy to fix issue. """
-    @classmethod
-    def INPUT_TYPES(s):
-        return {'required': {'vae': ('VAE',),
-                             'samples': ('LATENT',)}}
-    RETURN_TYPES = ('IMAGE',)
-    FUNCTION = 'decode'
-    #CATEGORY = 'Mikey/Latent'
-
-    def decode(self, vae, samples):
-        unload_model()
-        soft_empty_cache()
-        return (vae.decode(samples['samples']), )
-
 NODE_CLASS_MAPPINGS = {
     'Wildcard Processor': WildcardProcessor,
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
@@ -1841,7 +1824,6 @@ NODE_CLASS_MAPPINGS = {
     'AddMetaData': AddMetaData,
     'SaveMetaData': SaveMetaData,
     'HaldCLUT ': HaldCLUT,
-    'VAE Decode 6GB SDXL (deprecated)': VAEDecode6GB,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -1863,5 +1845,4 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'AddMetaData': 'AddMetaData (Mikey)',
     'SaveMetaData': 'SaveMetaData (Mikey)',
     'HaldCLUT': 'HaldCLUT (Mikey)',
-    'VAE Decode 6GB SDXL (deprecated)': 'VAE Decode 6GB SDXL (deprecated) (Mikey)',
 }
