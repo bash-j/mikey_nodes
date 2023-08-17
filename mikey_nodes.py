@@ -1813,7 +1813,7 @@ class IntegerAndString:
     RETURN_TYPES = ('INT','STRING')
     RETURN_NAMES = ('seed','seed_string')
     FUNCTION = 'output'
-    CATEGORY = 'Mikey'
+    CATEGORY = 'Mikey/Utils'
 
     def output(self, seed):
         seed_string = str(seed)
