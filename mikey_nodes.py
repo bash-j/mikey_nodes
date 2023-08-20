@@ -437,7 +437,7 @@ class RatioAdvanced:
         if 'none' not in s.ratio_presets:
             s.ratio_presets.append('none')
         return {"required": { "preset": (s.ratio_presets, {"default": "none"}),
-                              "preset_rotate": (['false', 'landscape', 'portrait'], {"default": 'false'}),
+                              "swap_axis": (['true','false'], {"default": 'false'}),
                               "select_latent_ratio": (s.ratio_sizes, {'default': default_ratio}),
                               "custom_latent_w": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
                               "custom_latent_h": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
@@ -482,7 +482,7 @@ class RatioAdvanced:
     def res(self, width, height, res):
         return find_latent_size(width, height, res)
 
-    def calculate(self, preset, preset_rotate, select_latent_ratio, custom_latent_w, custom_latent_h,
+    def calculate(self, preset, swap_axis, select_latent_ratio, custom_latent_w, custom_latent_h,
                   select_cte_ratio, cte_w, cte_h, cte_mult, cte_res, cte_fit_size,
                   select_target_ratio, target_w, target_h, target_mult, target_res, target_fit_size,
                   crop_w, crop_h, use_preset_seed, seed):
@@ -503,18 +503,11 @@ class RatioAdvanced:
             target_h = self.ratio_config[preset]['target_h']
             crop_w = self.ratio_config[preset]['crop_w']
             crop_h = self.ratio_config[preset]['crop_h']
-            if preset_rotate == 'landscape':
-                if latent_height > latent_width:
-                    latent_width, latent_height = latent_height, latent_width
-                    cte_w, cte_h = cte_h, cte_w
-                    target_w, target_h = target_h, target_w
-                    crop_w, crop_h = crop_h, crop_w
-            elif preset_rotate == 'portrait':
-                if latent_width > latent_height:
-                    latent_width, latent_height = latent_height, latent_width
-                    cte_w, cte_h = cte_h, cte_w
-                    target_w, target_h = target_h, target_w
-                    crop_w, crop_h = crop_h, crop_w
+            if swap_axis == 'true':
+                latent_width, latent_height = latent_height, latent_width
+                cte_w, cte_h = cte_h, cte_w
+                target_w, target_h = target_h, target_w
+                crop_w, crop_h = crop_h, crop_w
             """
             example user_ratio_presets.json
             {
@@ -585,7 +578,7 @@ class PresetRatioSelector:
     def INPUT_TYPES(s):
         s.ratio_presets, s.ratio_config = read_ratio_presets()
         return {"required": { "select_preset": (s.ratio_presets, {"default": "none"}),
-                              "preset_rotate": (['false', 'landscape', 'portrait'], {"default": 'false'}),
+                              "swap_axis": (['true','false'], {"default": 'false'}),
                               "use_preset_seed": (['true','false'], {"default": 'false'}),
                               "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff})}}
 
@@ -600,7 +593,7 @@ class PresetRatioSelector:
     CATEGORY = 'Mikey/Utils'
     FUNCTION = 'calculate'
 
-    def calculate(self, select_preset, preset_rotate, use_preset_seed, seed):
+    def calculate(self, select_preset, swap_axis, use_preset_seed, seed):
         # check if use_preset_seed is true
         if use_preset_seed == 'true' and len(self.ratio_presets) > 0:
             # seed is a randomly generated number that can be much larger than the number of presets
@@ -616,18 +609,11 @@ class PresetRatioSelector:
         target_h = self.ratio_config[select_preset]['target_h']
         crop_w = self.ratio_config[select_preset]['crop_w']
         crop_h = self.ratio_config[select_preset]['crop_h']
-        if preset_rotate == 'landscape':
-            if latent_height > latent_width:
-                latent_width, latent_height = latent_height, latent_width
-                cte_w, cte_h = cte_h, cte_w
-                target_w, target_h = target_h, target_w
-                crop_w, crop_h = crop_h, crop_w
-        elif preset_rotate == 'portrait':
-            if latent_width > latent_height:
-                latent_width, latent_height = latent_height, latent_width
-                cte_w, cte_h = cte_h, cte_w
-                target_w, target_h = target_h, target_w
-                crop_w, crop_h = crop_h, crop_w
+        if swap_axis == 'true':
+            latent_width, latent_height = latent_height, latent_width
+            cte_w, cte_h = cte_h, cte_w
+            target_w, target_h = target_h, target_w
+            crop_w, crop_h = crop_h, crop_w
         return (latent_width, latent_height,
                 cte_w, cte_h,
                 target_w, target_h,
