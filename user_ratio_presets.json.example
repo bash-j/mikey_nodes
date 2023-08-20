@@ -1,12 +1,202 @@
 {
     "ratio_presets": {
-        "1024x1024": {
+        "1024x1024 (AR 1:1 / DEC 1.0:1)": {
             "custom_latent_w": 1024,
             "custom_latent_h": 1024,
             "cte_w": 1024,
             "cte_h": 1024,
             "target_w": 4096,
             "target_h": 4096,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "1024x960 (AR ~1:1 / Near 16:15 / DEC 1.07:1)": {
+            "custom_latent_w": 1024,
+            "custom_latent_h": 960,
+            "cte_w": 1024,
+            "cte_h": 960,
+            "target_w": 4096,
+            "target_h": 3840,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "1088x960 (AR ~4:3 / Near 8.5:7.5 / DEC 1.13:1)": {
+            "custom_latent_w": 1088,
+            "custom_latent_h": 960,
+            "cte_w": 1088,
+            "cte_h": 960,
+            "target_w": 4096,
+            "target_h": 3616,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "1088x896 (AR ~4:3 / Near 17:14 / DEC 1.21:1)": {
+            "custom_latent_w": 1088,
+            "custom_latent_h": 896,
+            "cte_w": 1088,
+            "cte_h": 896,
+            "target_w": 4096,
+            "target_h": 3372,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "1152x896 (AR ~4:3 / Near 4.5:3.5 / DEC 1.29:1)": {
+            "custom_latent_w": 1152,
+            "custom_latent_h": 896,
+            "cte_w": 1152,
+            "cte_h": 896,
+            "target_w": 4096,
+            "target_h": 3188,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "1152x832 (AR ~4:3 / Near 18:13 / DEC 1.38:1)": {
+            "custom_latent_w": 1152,
+            "custom_latent_h": 832,
+            "cte_w": 1152,
+            "cte_h": 832,
+            "target_w": 4096,
+            "target_h": 2960,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "1216x832 (AR ~4:3 / Near 19:13 / DEC 1.46:1)": {
+            "custom_latent_w": 1216,
+            "custom_latent_h": 832,
+            "cte_w": 1216,
+            "cte_h": 832,
+            "target_w": 4096,
+            "target_h": 2804,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "1280x768 (AR ~16:9 / Near 5:3 / DEC 1.67:1)": {
+            "custom_latent_w": 1280,
+            "custom_latent_h": 768,
+            "cte_w": 1280,
+            "cte_h": 768,
+            "target_w": 4096,
+            "target_h": 2460,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "1344x768 (AR ~16:9 / Near 7:4 / DEC 1.75:1)": {
+            "custom_latent_w": 1344,
+            "custom_latent_h": 768,
+            "cte_w": 1344,
+            "cte_h": 768,
+            "target_w": 4096,
+            "target_h": 2340,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "1408x704 (AR 2:1 / DEC 2.0:1)": {
+            "custom_latent_w": 1408,
+            "custom_latent_h": 704,
+            "cte_w": 1408,
+            "cte_h": 704,
+            "target_w": 4096,
+            "target_h": 2048,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "1472x704 (AR ~2:1 / Near 23:11 / DEC 2.09:1)": {
+            "custom_latent_w": 1472,
+            "custom_latent_h": 704,
+            "cte_w": 1472,
+            "cte_h": 704,
+            "target_w": 4096,
+            "target_h": 1960,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "1536x640 (AR ~21:9 / Near 12:5 / DEC 2.4:1)": {
+            "custom_latent_w": 1536,
+            "custom_latent_h": 640,
+            "cte_w": 1536,
+            "cte_h": 640,
+            "target_w": 4096,
+            "target_h": 1708,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "1600x640 (AR ~5:2 / DEC 2.5:1)": {
+            "custom_latent_w": 1600,
+            "custom_latent_h": 640,
+            "cte_w": 1600,
+            "cte_h": 640,
+            "target_w": 4096,
+            "target_h": 1640,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "1664x576 (AR ~26:9 / DEC 2.89:1)": {
+            "custom_latent_w": 1664,
+            "custom_latent_h": 576,
+            "cte_w": 1664,
+            "cte_h": 576,
+            "target_w": 4096,
+            "target_h": 1420,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "1728x576 (AR ~3:1 / DEC 3.0:1)": {
+            "custom_latent_w": 1728,
+            "custom_latent_h": 576,
+            "cte_w": 1728,
+            "cte_h": 576,
+            "target_w": 4096,
+            "target_h": 1364,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "1792x576 (AR ~28:9 / DEC 3.11:1)": {
+            "custom_latent_w": 1792,
+            "custom_latent_h": 576,
+            "cte_w": 1792,
+            "cte_h": 576,
+            "target_w": 4096,
+            "target_h": 1316,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "1856x512 (AR ~29:8 / DEC 3.62:1)": {
+            "custom_latent_w": 1856,
+            "custom_latent_h": 512,
+            "cte_w": 1856,
+            "cte_h": 512,
+            "target_w": 4096,
+            "target_h": 1132,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "1920x512 (AR ~15:4 / DEC 3.75:1)": {
+            "custom_latent_w": 1920,
+            "custom_latent_h": 512,
+            "cte_w": 1920,
+            "cte_h": 512,
+            "target_w": 4096,
+            "target_h": 1092,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "1984x512 (AR ~31:8 / DEC 3.88:1)": {
+            "custom_latent_w": 1984,
+            "custom_latent_h": 512,
+            "cte_w": 1984,
+            "cte_h": 512,
+            "target_w": 4096,
+            "target_h": 1056,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+        "2048x512 (AR 4:1 / DEC 4.0:1)": {
+            "custom_latent_w": 2048,
+            "custom_latent_h": 512,
+            "cte_w": 2048,
+            "cte_h": 512,
+            "target_w": 4096,
+            "target_h": 1024,
             "crop_w": 0,
             "crop_h": 0
         }
