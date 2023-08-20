@@ -13,6 +13,7 @@ from PIL import Image, ImageOps, ImageDraw, ImageFilter
 from PIL.PngImagePlugin import PngInfo
 import torch
 import torch.nn.functional as F
+from tqdm import tqdm
 
 import folder_paths
 file_path = os.path.join(folder_paths.base_path, 'comfy_extras/nodes_clip_sdxl.py')
@@ -436,6 +437,7 @@ class RatioAdvanced:
         if 'none' not in s.ratio_presets:
             s.ratio_presets.append('none')
         return {"required": { "preset": (s.ratio_presets, {"default": "none"}),
+                              "preset_rotate": (['false', 'landscape', 'portrait'], {"default": 'false'}),
                               "select_latent_ratio": (s.ratio_sizes, {'default': default_ratio}),
                               "custom_latent_w": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
                               "custom_latent_h": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
@@ -480,7 +482,7 @@ class RatioAdvanced:
     def res(self, width, height, res):
         return find_latent_size(width, height, res)
 
-    def calculate(self, preset, select_latent_ratio, custom_latent_w, custom_latent_h,
+    def calculate(self, preset, preset_rotate, select_latent_ratio, custom_latent_w, custom_latent_h,
                   select_cte_ratio, cte_w, cte_h, cte_mult, cte_res, cte_fit_size,
                   select_target_ratio, target_w, target_h, target_mult, target_res, target_fit_size,
                   crop_w, crop_h, use_preset_seed, seed):
@@ -501,6 +503,16 @@ class RatioAdvanced:
             target_h = self.ratio_config[preset]['target_h']
             crop_w = self.ratio_config[preset]['crop_w']
             crop_h = self.ratio_config[preset]['crop_h']
+            if preset_rotate == 'landscape':
+                latent_width, latent_height = latent_height, latent_width
+                cte_w, cte_h = cte_h, cte_w
+                target_w, target_h = target_h, target_w
+                crop_w, crop_h = crop_h, crop_w
+            elif preset_rotate == 'portrait':
+                latent_width, latent_height = latent_height, latent_width
+                cte_w, cte_h = cte_h, cte_w
+                target_w, target_h = target_h, target_w
+                crop_w, crop_h = crop_h, crop_w
             """
             example user_ratio_presets.json
             {
@@ -561,6 +573,57 @@ class RatioAdvanced:
         # check if target_fit_size not 0
         if target_fit_size != 0:
             target_w, target_h = self.fit(target_w, target_h, target_fit_size)
+        return (latent_width, latent_height,
+                cte_w, cte_h,
+                target_w, target_h,
+                crop_w, crop_h)
+
+class PresetRatioSelector:
+    @classmethod
+    def INPUT_TYPES(s):
+        s.ratio_presets, s.ratio_config = read_ratio_presets()
+        return {"required": { "select_preset": (s.ratio_presets, {"default": "none"}),
+                              "preset_rotate": (['false', 'landscape', 'portrait'], {"default": 'false'}),
+                              "use_preset_seed": (['true','false'], {"default": 'false'}),
+                              "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff})}}
+
+    RETURN_TYPES = ('INT', 'INT', # latent
+                    'INT', 'INT', # clip text encode
+                    'INT', 'INT', # target
+                    'INT', 'INT') # crop
+    RETURN_NAMES = ('latent_w', 'latent_h',
+                    'cte_w', 'cte_h',
+                    'target_w', 'target_h',
+                    'crop_w', 'crop_h')
+    CATEGORY = 'Mikey/Utils'
+    FUNCTION = 'calculate'
+
+    def calculate(self, select_preset, preset_rotate, use_preset_seed, seed):
+        # check if use_preset_seed is true
+        if use_preset_seed == 'true' and len(self.ratio_presets) > 0:
+            # seed is a randomly generated number that can be much larger than the number of presets
+            # we use the seed to select a preset
+            offset = seed % len(self.ratio_presets - 1)
+            presets = [p for p in self.ratio_presets if p != 'none']
+            select_preset = presets[offset]
+        latent_width = self.ratio_config[select_preset]['custom_latent_w']
+        latent_height = self.ratio_config[select_preset]['custom_latent_h']
+        cte_w = self.ratio_config[select_preset]['cte_w']
+        cte_h = self.ratio_config[select_preset]['cte_h']
+        target_w = self.ratio_config[select_preset]['target_w']
+        target_h = self.ratio_config[select_preset]['target_h']
+        crop_w = self.ratio_config[select_preset]['crop_w']
+        crop_h = self.ratio_config[select_preset]['crop_h']
+        if preset_rotate == 'landscape':
+            latent_width, latent_height = latent_height, latent_width
+            cte_w, cte_h = cte_h, cte_w
+            target_w, target_h = target_h, target_w
+            crop_w, crop_h = crop_h, crop_w
+        elif preset_rotate == 'portrait':
+            latent_width, latent_height = latent_height, latent_width
+            cte_w, cte_h = cte_h, cte_w
+            target_w, target_h = target_h, target_w
+            crop_w, crop_h = crop_h, crop_w
         return (latent_width, latent_height,
                 cte_w, cte_h,
                 target_w, target_h,
@@ -685,6 +748,84 @@ class BatchCropImage:
                 img = pil2tensor(cropped_img)
                 images.append(img)
         return (images,)
+
+class BatchCropResizeInplace:
+    crop_methods = ["disabled", "center"]
+    upscale_methods = ["nearest-exact", "bilinear", "area", "bicubic"]
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"image_directory": ("STRING", {"multiline": False, "placeholder": "Image Directory"}),
+                             "subdirectories": (['true', 'false'], {"default": 'false'}),
+                             "replace_original": (['true', 'false'], {"default": 'false'}),
+                             "replace_suffix": ("STRING", {"default": "_cropped_resized"}),
+                             "upscale_method": (s.upscale_methods,),
+                             "crop": (s.crop_methods,),
+                             "crop_amount": ("FLOAT", {"default": 0.05})}}
+
+    RETURN_TYPES = ('STRING',)
+    RETURN_NAMES = ('job_done',)
+    FUNCTION = 'batch'
+    CATEGORY = 'Mikey/Image'
+
+    def crop(self, image, crop_amount):
+        # resize image
+        width, height = image.size
+        pixels = int(width * crop_amount) // 8 * 8
+        left = pixels
+        upper = pixels
+        right = width - pixels
+        lower = height - pixels
+        # Crop the image
+        cropped_img = image.crop((left, upper, right, lower))
+        return cropped_img
+
+    def upscale(self, image, upscale_method, width, height, crop):
+        samples = image.movedim(-1,1)
+        s = comfy.utils.common_upscale(samples, width, height, upscale_method, crop)
+        s = s.movedim(1,-1)
+        return (s,)
+
+    def resize(self, image, upscale_method, crop):
+        image = pil2tensor(image)
+        w, h = find_latent_size(image.shape[2], image.shape[1])
+        img = self.upscale(image, upscale_method, w, h, crop)[0]
+        img = tensor2pil(img)
+        return img
+
+    def get_files_from_directory(self, image_directory, subdirectories):
+        if subdirectories == 'true':
+            files = [os.path.join(root, name)
+                    for root, dirs, files in os.walk(image_directory)
+                    for name in files
+                    if name.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"))]
+        else:
+            files = [os.path.join(image_directory, f)
+                     for f in os.listdir(image_directory)
+                     if os.path.isfile(os.path.join(image_directory, f)) and f.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"))]
+        return files
+
+    def batch(self, image_directory, subdirectories, replace_original, replace_suffix, upscale_method, crop, crop_amount):
+        if not os.path.exists(image_directory):
+            raise Exception(f"Image directory {image_directory} does not exist")
+
+        files = self.get_files_from_directory(image_directory, subdirectories)
+
+        for file in tqdm(files, desc='Processing images'):
+            img = Image.open(file)
+            # crop image
+            if crop != 'disabled':
+                img = self.crop(img, crop_amount)
+            # resize image
+            img = self.resize(img, upscale_method, crop)
+            # save image
+            if replace_original == 'true':
+                img.save(file)
+            else:
+                filename, file_extension = os.path.splitext(file)
+                img.save(filename + replace_suffix + file_extension)
+        return (f'Job done, {len(files)} images processed',)
+
 
 def get_save_image_path(filename_prefix, output_dir, image_width=0, image_height=0):
     def map_filename(filename):
@@ -2036,6 +2177,7 @@ NODE_CLASS_MAPPINGS = {
     'Wildcard Processor': WildcardProcessor,
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
     'Empty Latent Ratio Custom SDXL': EmptyLatentRatioCustom,
+    'PresetRatioSelector': PresetRatioSelector,
     'Ratio Advanced': RatioAdvanced,
     'Int to String': INTtoSTRING,
     'Float to String': FLOATtoSTRING,
@@ -2046,6 +2188,7 @@ NODE_CLASS_MAPPINGS = {
     'Upscale Tile Calculator': UpscaleTileCalculator,
     'Batch Resize Image for SDXL': BatchResizeImageSDXL,
     'Batch Crop Image': BatchCropImage,
+    'Batch Crop Resize Inplace': BatchCropResizeInplace,
     'Prompt With Style': PromptWithStyle,
     'Prompt With Style V2': PromptWithStyleV2,
     'Prompt With Style V3': PromptWithStyleV3,
@@ -2063,6 +2206,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Wildcard Processor': 'Wildcard Processor (Mikey)',
     'Empty Latent Ratio Select SDXL': 'Empty Latent Ratio Select SDXL (Mikey)',
     'Empty Latent Ratio Custom SDXL': 'Empty Latent Ratio Custom SDXL (Mikey)',
+    'PresetRatioSelector': 'Preset Ratio Selector (Mikey)',
     'Ratio Advanced': 'Ratio Advanced (Mikey)',
     'Int to String': 'Int to String (Mikey)',
     'Float to String': 'Float to String (Mikey)',
@@ -2073,6 +2217,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Batch Crop Image': 'Batch Crop Image (Mikey)',
     'Upscale Tile Calculator': 'Upscale Tile Calculator (Mikey)',
     'Batch Resize Image for SDXL': 'Batch Resize Image for SDXL (Mikey)',
+    'Batch Crop Resize Inplace': 'Batch Crop Resize Inplace (Mikey)',
     'Prompt With Style V3': 'Prompt With Style (Mikey)',
     'Prompt With Style': 'Prompt With Style V1 (Mikey)',
     'Prompt With Style V2': 'Prompt With Style V2 (Mikey)',
