@@ -504,15 +504,17 @@ class RatioAdvanced:
             crop_w = self.ratio_config[preset]['crop_w']
             crop_h = self.ratio_config[preset]['crop_h']
             if preset_rotate == 'landscape':
-                latent_width, latent_height = latent_height, latent_width
-                cte_w, cte_h = cte_h, cte_w
-                target_w, target_h = target_h, target_w
-                crop_w, crop_h = crop_h, crop_w
+                if latent_height > latent_width:
+                    latent_width, latent_height = latent_height, latent_width
+                    cte_w, cte_h = cte_h, cte_w
+                    target_w, target_h = target_h, target_w
+                    crop_w, crop_h = crop_h, crop_w
             elif preset_rotate == 'portrait':
-                latent_width, latent_height = latent_height, latent_width
-                cte_w, cte_h = cte_h, cte_w
-                target_w, target_h = target_h, target_w
-                crop_w, crop_h = crop_h, crop_w
+                if latent_width > latent_height:
+                    latent_width, latent_height = latent_height, latent_width
+                    cte_w, cte_h = cte_h, cte_w
+                    target_w, target_h = target_h, target_w
+                    crop_w, crop_h = crop_h, crop_w
             """
             example user_ratio_presets.json
             {
@@ -615,15 +617,17 @@ class PresetRatioSelector:
         crop_w = self.ratio_config[select_preset]['crop_w']
         crop_h = self.ratio_config[select_preset]['crop_h']
         if preset_rotate == 'landscape':
-            latent_width, latent_height = latent_height, latent_width
-            cte_w, cte_h = cte_h, cte_w
-            target_w, target_h = target_h, target_w
-            crop_w, crop_h = crop_h, crop_w
+            if latent_height > latent_width:
+                latent_width, latent_height = latent_height, latent_width
+                cte_w, cte_h = cte_h, cte_w
+                target_w, target_h = target_h, target_w
+                crop_w, crop_h = crop_h, crop_w
         elif preset_rotate == 'portrait':
-            latent_width, latent_height = latent_height, latent_width
-            cte_w, cte_h = cte_h, cte_w
-            target_w, target_h = target_h, target_w
-            crop_w, crop_h = crop_h, crop_w
+            if latent_width > latent_height:
+                latent_width, latent_height = latent_height, latent_width
+                cte_w, cte_h = cte_h, cte_w
+                target_w, target_h = target_h, target_w
+                crop_w, crop_h = crop_h, crop_w
         return (latent_width, latent_height,
                 cte_w, cte_h,
                 target_w, target_h,
