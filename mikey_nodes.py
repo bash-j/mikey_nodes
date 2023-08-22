@@ -1763,6 +1763,64 @@ class MikeySampler:
                                 start_step=start_step, force_full_denoise=True)
         return out
 
+class MikeySamplerBaseOnly:
+    @classmethod
+    def INPUT_TYPES(s):
+
+        return {"required": {"base_model": ("MODEL",), "samples": ("LATENT",),
+                             "positive_cond_base": ("CONDITIONING",), "negative_cond_base": ("CONDITIONING",),
+                             "vae": ("VAE",),
+                             "model_name": (folder_paths.get_filename_list("upscale_models"), ),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                             "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1}),
+                             "hires_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.1}),}}
+
+    RETURN_TYPES = ('LATENT',)
+    FUNCTION = 'run'
+    CATEGORY = 'Mikey/Sampling'
+
+    def adjust_start_step(self, image_complexity, hires_strength=1.0):
+        image_complexity /= 24
+        if image_complexity > 1:
+            image_complexity = 1
+        image_complexity = min([0.55, image_complexity]) * hires_strength
+        return min([16, 16 - int(round(image_complexity * 16,0))])
+
+    def run(self, seed, base_model, vae, samples, positive_cond_base, negative_cond_base,
+            model_name, upscale_by=1.0, hires_strength=1.0,
+            upscale_method='normal'):
+        image_scaler = ImageScale()
+        vaeencoder = VAEEncode()
+        vaedecoder = VAEDecode()
+        uml = UpscaleModelLoader()
+        upscale_model = uml.load_model(model_name)[0]
+        iuwm = ImageUpscaleWithModel()
+        # common_ksampler(model, seed, steps, cfg, sampler_name, scheduler, positive, negative, latent, denoise=1.0,
+        # disable_noise=False, start_step=None, last_step=None, force_full_denoise=False)
+        # step 1 run base model low cfg
+        sample1 = common_ksampler(base_model, seed, 30, 5, 'dpmpp_3m_sde_gpu', 'exponential', positive_cond_base, negative_cond_base, samples,
+                                  start_step=0, last_step=14, force_full_denoise=False)[0]
+        # step 2 run base model high cfg
+        sample2 = common_ksampler(base_model, seed+1, 31, 9.5, 'dpmpp_3m_sde_gpu', 'exponential', positive_cond_base, negative_cond_base, sample1,
+                                  disable_noise=True, start_step=15, force_full_denoise=True)[0]
+        # step 3 upscale
+        pixels = vaedecoder.decode(vae, sample2)[0]
+        org_width, org_height = pixels.shape[2], pixels.shape[1]
+        img = iuwm.upscale(upscale_model, image=pixels)[0]
+        upscaled_width, upscaled_height = int(org_width * upscale_by // 8 * 8), int(org_height * upscale_by // 8 * 8)
+        img = image_scaler.upscale(img, 'nearest-exact', upscaled_width, upscaled_height, 'center')[0]
+        # Adjust start_step based on complexity
+        image_complexity = calculate_image_complexity(img)
+        print('Image Complexity:', image_complexity)
+        start_step = self.adjust_start_step(image_complexity, hires_strength)
+        # encode image
+        latent = vaeencoder.encode(vae, img)[0]
+        # step 3 run base model
+        out = common_ksampler(base_model, seed, 16, 9.5, 'dpmpp_3m_sde_gpu', 'exponential', positive_cond_base, negative_cond_base, latent,
+                                start_step=start_step, force_full_denoise=True)
+        return out
+
+
 def match_histograms(source, reference):
     """
     Adjust the pixel values of a grayscale image such that its histogram
@@ -2185,6 +2243,7 @@ NODE_CLASS_MAPPINGS = {
     'Prompt With SDXL': PromptWithSDXL,
     'Style Conditioner': StyleConditioner,
     'Mikey Sampler': MikeySampler,
+    'Mikey Sampler Base Only': MikeySamplerBaseOnly,
     'Mikey Sampler Tiled': MikeySamplerTiled,
     'AddMetaData': AddMetaData,
     'SaveMetaData': SaveMetaData,
@@ -2214,6 +2273,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Prompt With SDXL': 'Prompt With SDXL (Mikey)',
     'Style Conditioner': 'Style Conditioner (Mikey)',
     'Mikey Sampler': 'Mikey Sampler',
+    'Mikey Sampler Base Only': 'Mikey Sampler Base Only',
     'Mikey Sampler Tiled': 'Mikey Sampler Tiled',
     'AddMetaData': 'AddMetaData (Mikey)',
     'SaveMetaData': 'SaveMetaData (Mikey)',
