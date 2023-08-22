@@ -1773,7 +1773,8 @@ class MikeySamplerBaseOnly:
                              "model_name": (folder_paths.get_filename_list("upscale_models"), ),
                              "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
                              "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1}),
-                             "hires_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.1}),}}
+                             "hires_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.1}),
+                             'smooth_step': ("INT", {"default": 0, "min": 0, "max": 100})}}
 
     RETURN_TYPES = ('LATENT',)
     FUNCTION = 'run'
@@ -1784,11 +1785,10 @@ class MikeySamplerBaseOnly:
         if image_complexity > 1:
             image_complexity = 1
         image_complexity = min([0.55, image_complexity]) * hires_strength
-        return min([16, 16 - int(round(image_complexity * 16,0))])
+        return min([31, 31 - int(round(image_complexity * 31,0))])
 
     def run(self, seed, base_model, vae, samples, positive_cond_base, negative_cond_base,
-            model_name, upscale_by=1.0, hires_strength=1.0,
-            upscale_method='normal'):
+            model_name, upscale_by=1.0, hires_strength=1.0, upscale_method='normal', smooth_step=0):
         image_scaler = ImageScale()
         vaeencoder = VAEEncode()
         vaedecoder = VAEDecode()
@@ -1801,7 +1801,7 @@ class MikeySamplerBaseOnly:
         sample1 = common_ksampler(base_model, seed, 30, 5, 'dpmpp_3m_sde_gpu', 'exponential', positive_cond_base, negative_cond_base, samples,
                                   start_step=0, last_step=14, force_full_denoise=False)[0]
         # step 2 run base model high cfg
-        sample2 = common_ksampler(base_model, seed+1, 31, 9.5, 'dpmpp_3m_sde_gpu', 'exponential', positive_cond_base, negative_cond_base, sample1,
+        sample2 = common_ksampler(base_model, seed+1, 31 + smooth_step, 9.5, 'dpmpp_3m_sde_gpu', 'exponential', positive_cond_base, negative_cond_base, sample1,
                                   disable_noise=True, start_step=15, force_full_denoise=True)[0]
         # step 3 upscale
         pixels = vaedecoder.decode(vae, sample2)[0]
@@ -1816,7 +1816,7 @@ class MikeySamplerBaseOnly:
         # encode image
         latent = vaeencoder.encode(vae, img)[0]
         # step 3 run base model
-        out = common_ksampler(base_model, seed, 16, 9.5, 'dpmpp_3m_sde_gpu', 'exponential', positive_cond_base, negative_cond_base, latent,
+        out = common_ksampler(base_model, seed, 31, 9.5, 'dpmpp_3m_sde_gpu', 'exponential', positive_cond_base, negative_cond_base, latent,
                                 start_step=start_step, force_full_denoise=True)
         return out
 
