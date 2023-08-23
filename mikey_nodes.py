@@ -1774,7 +1774,7 @@ class MikeySamplerBaseOnly:
                              "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
                              "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1}),
                              "hires_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.1}),
-                             'smooth_step': ("INT", {"default": 0, "min": 0, "max": 100})}}
+                             'smooth_step': ("INT", {"default": 0, "min": -1, "max": 100})}}
 
     RETURN_TYPES = ('LATENT',)
     FUNCTION = 'run'
