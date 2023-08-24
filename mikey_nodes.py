@@ -9,7 +9,7 @@ import re
 import sys
 
 import numpy as np
-from PIL import Image, ImageOps, ImageDraw, ImageFilter
+from PIL import Image, ImageOps, ImageDraw, ImageFilter, ImageChops
 from PIL.PngImagePlugin import PngInfo
 import torch
 import torch.nn.functional as F
@@ -1851,6 +1851,122 @@ def match_histograms(source, reference):
     matched_img = Image.merge('YCbCr', (matched_img, src_cb, src_cr)).convert('RGB')
     return matched_img
 
+
+def split_image(img):
+    """Generate tiles for a given image."""
+    tile_width, tile_height = 1024, 1024
+    width, height = img.width, img.height
+
+    # Determine the number of tiles needed
+    num_tiles_x = ceil(width / tile_width)
+    num_tiles_y = ceil(height / tile_height)
+
+    # If width or height is an exact multiple of the tile size, add an additional tile for overlap
+    if width % tile_width == 0:
+        num_tiles_x += 1
+    if height % tile_height == 0:
+        num_tiles_y += 1
+
+    # Calculate the overlap
+    overlap_x = (num_tiles_x * tile_width - width) / (num_tiles_x - 1)
+    overlap_y = (num_tiles_y * tile_height - height) / (num_tiles_y - 1)
+
+    tiles = []
+
+    for i in range(num_tiles_y):
+        for j in range(num_tiles_x):
+            x_start = j * tile_width - j * overlap_x
+            y_start = i * tile_height - i * overlap_y
+
+            # Correct for potential float precision issues
+            x_start = round(x_start)
+            y_start = round(y_start)
+
+            # Crop the tile from the image
+            tile_img = img.crop((x_start, y_start, x_start + tile_width, y_start + tile_height))
+            tiles.append(((x_start, y_start, x_start + tile_width, y_start + tile_height), tile_img))
+
+    return tiles
+
+def stitch_images(upscaled_size, tiles):
+    """Stitch tiles together to create the final upscaled image with overlaps."""
+    width, height = upscaled_size
+    result = torch.zeros((3, height, width))
+
+    # We assume tiles come in the format [(coordinates, tile), ...]
+    sorted_tiles = sorted(tiles, key=lambda x: (x[0][1], x[0][0]))  # Sort by upper then left
+
+    # Variables to keep track of the current row's starting point
+    current_row_upper = None
+
+    for (left, upper, right, lower), tile in sorted_tiles:
+
+        # Check if we're starting a new row
+        if current_row_upper != upper:
+            current_row_upper = upper
+            first_tile_in_row = True
+        else:
+            first_tile_in_row = False
+
+        tile_width = right - left
+        tile_height = lower - upper
+        feather = tile_width // 8  # Assuming feather size is consistent with the example
+
+        mask = torch.ones(tile.shape[0], tile.shape[1], tile.shape[2])
+
+        if not first_tile_in_row:  # Left feathering for tiles other than the first in the row
+            for t in range(feather):
+                mask[:, :, t:t+1] *= (1.0 / feather) * (t + 1)
+
+        if upper != 0:  # Top feathering for all tiles except the first row
+            for t in range(feather):
+                mask[:, t:t+1, :] *= (1.0 / feather) * (t + 1)
+
+        # Apply the feathering mask
+        tile = tile.squeeze(0).squeeze(0)  # Removes first two dimensions
+        tile_to_add = tile.permute(2, 0, 1)
+        # Use the mask to correctly feather the new tile on top of the existing image
+        combined_area = tile_to_add * mask.unsqueeze(0) + result[:, upper:lower, left:right] * (1.0 - mask.unsqueeze(0))
+        result[:, upper:lower, left:right] = combined_area
+
+    # Expand dimensions to get (1, 3, height, width)
+    tensor_expanded = result.unsqueeze(0)
+
+    # Permute dimensions to get (1, height, width, 3)
+    tensor_final = tensor_expanded.permute(0, 2, 3, 1)
+    return tensor_final
+
+def ai_upscale(tile, base_model, vae, seed, positive_cond_base, negative_cond_base, start_step=11):
+    """Upscale a tile using the AI model."""
+    vaedecoder = VAEDecode()
+    vaeencoder = VAEEncode()
+    tile = pil2tensor(tile)
+    complexity = calculate_image_complexity(tile)
+    print('Tile Complexity:', complexity)
+    if complexity < 8:
+        start_step = 15
+    if complexity < 6.5:
+        start_step = 18
+    encoded_tile = vaeencoder.encode(vae, tile)[0]
+    tile = common_ksampler(base_model, seed, 20, 7, 'dpmpp_3m_sde_gpu', 'exponential',
+                           positive_cond_base, negative_cond_base, encoded_tile,
+                           start_step=start_step, force_full_denoise=True)[0]
+    tile = vaedecoder.decode(vae, tile)[0]
+    return tile
+
+def run_tiler(enlarged_img, base_model, vae, seed, positive_cond_base, negative_cond_base, denoise=0.25):
+    # Split the enlarged image into overlapping tiles
+    tiles = split_image(enlarged_img)
+
+    # Resample each tile using the AI model
+    start_step = int(20 - (20 * denoise))
+    resampled_tiles = [(coords, ai_upscale(tile, base_model, vae, seed, positive_cond_base, negative_cond_base, start_step)) for coords, tile in tiles]
+
+    # Stitch the tiles to get the final upscaled image
+    result = stitch_images(enlarged_img.size, resampled_tiles)
+
+    return result
+
 class MikeySamplerTiled:
     @classmethod
     def INPUT_TYPES(s):
@@ -1869,175 +1985,6 @@ class MikeySamplerTiled:
     FUNCTION = 'run'
     CATEGORY = 'Mikey/Sampling'
 
-    def divide_into_tiles_with_padding(self, image, tile_width, tile_height, padding=64):
-        tiles = []
-        positions = []
-
-        width, height = image.size
-
-        width_overflow = width % tile_width
-        height_overflow = height % tile_height
-
-        width_adjustment = width_overflow // (width // tile_width)
-        height_adjustment = height_overflow // (height // tile_height)
-
-        x_adjusted, y_adjusted = 0, 0
-
-        for y in range(0, height, tile_height):
-            x_adjusted = 0
-            if y_adjusted < height_overflow:
-                tile_height_adjusted = tile_height + height_adjustment
-                y_adjusted += 1
-            else:
-                tile_height_adjusted = tile_height
-
-            for x in range(0, width, tile_width):
-                # Determine the adjustment based on the current iteration
-                if x_adjusted < width_overflow:
-                    tile_width_adjusted = tile_width + width_adjustment
-                    x_adjusted += 1
-                else:
-                    tile_width_adjusted = tile_width
-
-                # Define box with selective padding
-                left_padding = padding if x != 0 else 0
-                upper_padding = padding if y != 0 else 0
-                right_padding = padding if x + tile_width_adjusted < width else 0
-                lower_padding = padding if y + tile_height_adjusted < height else 0
-
-                left = max(0, x - left_padding)
-                upper = max(0, y - upper_padding)
-                right = min(width, x + tile_width_adjusted + right_padding)
-                lower = min(height, y + tile_height_adjusted + lower_padding)
-
-                tile = image.crop((left, upper, right, lower))
-
-                # Resize the cropped tile to maintain uniform tile dimensions
-                new_width = tile_width + left_padding + right_padding
-                new_height = tile_height + upper_padding + lower_padding
-                tile = tile.resize((new_width, new_height))
-
-                tiles.append(tile)
-                positions.append((x, y))
-
-        return tiles, positions
-
-    def divide_into_tiles_with_offset(self, image, tile_width, tile_height, padding=64, offset=None):
-        tiles = []
-        positions = []
-
-        width, height = image.size
-
-        # If offset isn't given, just use the tile width/height as usual (i.e., no overlap).
-        if offset is None:
-            offset = tile_width  # For the x axis
-            offset_y = tile_height  # For the y axis
-        else:
-            offset_y = offset  # If offset is given, use it for both axes
-
-        for y in range(0, height - tile_height + 1, offset_y):  # Subtract tile height to ensure last tile doesn't exceed image bounds
-            for x in range(0, width - tile_width + 1, offset):  # Similarly subtract tile width here
-                left_padding = padding if x != 0 else 0
-                upper_padding = padding if y != 0 else 0
-                right_padding = padding if x + tile_width < width else 0
-                lower_padding = padding if y + tile_height < height else 0
-
-                left = max(0, x - left_padding)
-                upper = max(0, y - upper_padding)
-                right = min(width, x + tile_width + right_padding)
-                lower = min(height, y + tile_height + lower_padding)
-
-                tile = image.crop((left, upper, right, lower))
-
-                new_width = tile_width + left_padding + right_padding
-                new_height = tile_height + upper_padding + lower_padding
-                tile = tile.resize((new_width, new_height))
-
-                tiles.append(tile)
-                positions.append((x, y))
-
-        return tiles, positions
-
-    def crop_tile_with_padding(self, base_image, tile, position, padding=64):
-        # can't crop off every side or you will end up with a smaller tile than you started with
-        # padding is not added to every side in the first place
-        x, y = position
-        left_padding = padding if x != 0 else 0
-        upper_padding = padding if y != 0 else 0
-        right_padding = padding if x + tile.width > base_image.width else 0
-        lower_padding = padding if y + tile.height > base_image.height else 0
-
-        cropped_tile = tile.crop((left_padding, upper_padding, tile.width - right_padding, tile.height - lower_padding))
-        return cropped_tile
-
-    def feather_padded_tile(self, base_image, tile, position, padding=64, width=16):
-        x, y = position
-
-        # Check for each side if it should be feathered
-        left_feather = x != 0
-        right_feather = x + tile.width - padding * 2 < base_image.width
-        top_feather = y != 0
-        bottom_feather = y + tile.height - padding * 2 < base_image.height
-
-        tile = tile.convert("RGBA")
-        mask = Image.new('L', tile.size, 255)
-        draw = ImageDraw.Draw(mask)
-
-        # Horizontal gradient
-        for x in range(width):
-            gradient_value = int(255 * (x / width))
-            if left_feather:
-                draw.line([(x, 0), (x, tile.height)], fill=gradient_value)
-            if right_feather:
-                draw.line([(tile.width - x - 1, 0), (tile.width - x - 1, tile.height)], fill=gradient_value)
-
-        # Vertical gradient
-        for y in range(width):
-            gradient_value = int(255 * (y / width))
-            if top_feather:
-                draw.line([(0, y), (tile.width, y)], fill=gradient_value)
-            if bottom_feather:
-                draw.line([(0, tile.height - y - 1), (tile.width, tile.height - y - 1)], fill=gradient_value)
-
-        tile.putalpha(mask)
-        return tile
-
-    def overlay_tiles(self, base_image, tile, position, padding=64, feathering_width=16):
-        """
-        Overlays a tile on top of a base image.
-        The function assumes PIL.Image objects.
-        """
-        x, y = position
-
-        # Define crop boundaries based on the position of the tile.
-        left_padding = padding if x != 0 else 0
-        upper_padding = padding if y != 0 else 0
-        right_padding = padding if x + tile.width > base_image.width else 0
-        lower_padding = padding if y + tile.height > base_image.height else 0
-
-        cropped_tile = tile.crop((left_padding, upper_padding, tile.width - right_padding, tile.height - lower_padding))
-        # feather cropped tile
-        cropped_tile = self.feather_padded_tile(base_image, cropped_tile, position, padding=padding, width=feathering_width)
-        # paste cropped tile that used to be padded onto base image
-        base_image.paste(cropped_tile, position, cropped_tile)
-        return base_image
-
-    def overlay_offset_tiles(self, base_image, tiles, positions, padding=64, feathering_width=32):
-        """
-        Overlays a list of tiles on top of a base image.
-        Assumes tiles have an offset and can overlap.
-        The function assumes PIL.Image objects.
-        """
-        for tile, position in zip(tiles, positions):
-            # Process each tile as before
-            cropped_tile = self.crop_tile_with_padding(base_image, tile, position, padding=padding)
-            feathered_tile = self.feather_padded_tile(base_image, cropped_tile, position, padding=padding, width=feathering_width)
-
-            # Paste feathered tile onto the base image
-            base_image.paste(feathered_tile, position, feathered_tile)
-
-        return base_image
-
     def phase_one(self, base_model, refiner_model, samples, positive_cond_base, negative_cond_base,
                   positive_cond_refiner, negative_cond_refiner, upscale_by, model_name, seed, vae):
         image_scaler = ImageScale()
@@ -2046,11 +1993,11 @@ class MikeySamplerTiled:
         upscale_model = uml.load_model(model_name)[0]
         iuwm = ImageUpscaleWithModel()
         # step 1 run base model
-        sample1 = common_ksampler(base_model, seed, 25, 6.5, 'dpmpp_2s_ancestral', 'simple', positive_cond_base, negative_cond_base, samples,
-                                  start_step=0, last_step=18, force_full_denoise=False)[0]
+        sample1 = common_ksampler(base_model, seed, 30, 6.5, 'dpmpp_3m_sde_gpu', 'exponential', positive_cond_base, negative_cond_base, samples,
+                                  start_step=0, last_step=14, force_full_denoise=False)[0]
         # step 2 run refiner model
-        sample2 = common_ksampler(refiner_model, seed, 30, 3.5, 'dpmpp_2m', 'simple', positive_cond_refiner, negative_cond_refiner, sample1,
-                                  disable_noise=True, start_step=21, force_full_denoise=True)[0]
+        sample2 = common_ksampler(refiner_model, seed, 32, 3.5, 'dpmpp_3m_sde_gpu', 'exponential', positive_cond_refiner, negative_cond_refiner, sample1,
+                                  disable_noise=True, start_step=15, force_full_denoise=True)[0]
         # step 3 upscale image using a simple AI image upscaler
         pixels = vaedecoder.decode(vae, sample2)[0]
         org_width, org_height = pixels.shape[2], pixels.shape[1]
@@ -2059,68 +2006,6 @@ class MikeySamplerTiled:
         img = image_scaler.upscale(img, 'nearest-exact', upscaled_width, upscaled_height, 'center')[0]
         return img, upscaled_width, upscaled_height
 
-    def tiler(self, base_model, refiner_model, vae, img, positive_cond_base, negative_cond_base,
-              positive_cond_refiner, negative_cond_refiner, seed, upscaled_width, upscaled_height,
-              tiler_denoise, tiler_model, tiler_mode='padding', offset_amount=1.3):
-        vaeencoder = VAEEncode()
-        vaedecoder = VAEDecode()
-        # Tiled upscaler logic  (more advanced upscaling method)
-        pil_img = tensor2pil(img)
-        tile_width, tile_height = find_tile_dimensions(upscaled_width, upscaled_height, 1.0, 1024)
-        if tiler_mode == 'padding':
-            tiles, positions = self.divide_into_tiles_with_padding(pil_img, tile_width, tile_height, 64)
-        else:
-            tiles, positions = self.divide_into_tiles_with_offset(pil_img, tile_width, tile_height, 64, offset=int(tile_width // offset_amount))
-        # Phase 1: Encoding the tiles
-        latent_tiles = []
-        for tile in tiles:
-            tile_img = pil2tensor(tile)
-            tile_latent = vaeencoder.encode(vae, tile_img)[0]
-            latent_tiles.append(tile_latent)
-        # Phase 2: Sampling using the encoded latents
-        start_step = int(20 - (20 * tiler_denoise))
-        resampled_tiles = []
-        if tiler_model == 'base':
-            for tile_latent in latent_tiles:
-                tile_resampled = common_ksampler(base_model, seed, 20, 7, 'dpmpp_2m_sde', 'karras',
-                                                positive_cond_base, negative_cond_base, tile_latent,
-                                                start_step=start_step, force_full_denoise=True)[0]
-                resampled_tiles.append(tile_resampled)
-        else:
-            for tile_latent in latent_tiles:
-                tile_resampled = common_ksampler(refiner_model, seed, 20, 7, 'dpmpp_2m_sde', 'karras',
-                                                positive_cond_refiner, negative_cond_refiner, tile_latent,
-                                                start_step=start_step, force_full_denoise=True)[0]
-                resampled_tiles.append(tile_resampled)
-        # Phase 3: Decoding the sampled tiles and feathering
-        processed_tiles = []
-        for tile_resampled, original_tile, position in zip(resampled_tiles, tiles, positions):
-            # Decode the tile
-            tile_img = vaedecoder.decode(vae, tile_resampled)[0]
-            tile_pil = tensor2pil(tile_img)
-            # Histogram match with original tile
-            matched_tile = match_histograms(tile_pil, original_tile)
-            processed_tiles.append(matched_tile)
-        # stitch the tiles back together with overlay
-        #white_img = Image.new('RGB', (upscaled_width, upscaled_height), (255, 255, 255))
-        if tiler_mode == 'padding':
-            final_image = pil_img
-            for tile, position in zip(processed_tiles, positions):
-                final_image = self.overlay_tiles(final_image, tile, position, 64)
-            # second pass
-            final_image = match_histograms(pil_img, final_image)
-            for tile, position in zip(processed_tiles, positions):
-                final_image = self.overlay_tiles(final_image, tile, position, 64)
-            final_image = pil2tensor(final_image)
-        else:
-            final_image = pil_img
-            final_image = self.overlay_offset_tiles(final_image, processed_tiles, positions)
-            # second pass
-            final_image = match_histograms(pil_img, final_image)
-            final_image = self.overlay_offset_tiles(final_image, processed_tiles, positions)
-            final_image = pil2tensor(final_image)
-        return final_image
-
     def run(self, seed, base_model, refiner_model, vae, samples, positive_cond_base, negative_cond_base,
             positive_cond_refiner, negative_cond_refiner, model_name, upscale_by=1.0, tiler_denoise=0.25,
             upscale_method='normal', tiler_model='base'):
@@ -2128,16 +2013,67 @@ class MikeySamplerTiled:
         img, upscaled_width, upscaled_height = self.phase_one(base_model, refiner_model, samples, positive_cond_base, negative_cond_base,
                                                               positive_cond_refiner, negative_cond_refiner, upscale_by, model_name, seed, vae)
         # phase 2: run tiler
-        tiled_image = self.tiler(base_model, refiner_model, vae, img, positive_cond_base, negative_cond_base,
-                                 positive_cond_refiner, negative_cond_refiner, seed, upscaled_width, upscaled_height,
-                                 tiler_denoise, tiler_model, tiler_mode='offset', offset_amount=1)
-        tiled_image = self.tiler(base_model, refiner_model, vae, tiled_image, positive_cond_base, negative_cond_base,
-                                 positive_cond_refiner, negative_cond_refiner, seed, upscaled_width, upscaled_height,
-                                 .4, tiler_model, tiler_mode='offset', offset_amount=2)
-        tiled_image = self.tiler(base_model, refiner_model, vae, tiled_image, positive_cond_base, negative_cond_base,
-                                 positive_cond_refiner, negative_cond_refiner, seed, upscaled_width, upscaled_height,
-                                 .2, tiler_model, tiler_mode='offset', offset_amount=1)
+        img = tensor2pil(img)
+        if tiler_model == 'base':
+            tiled_image = run_tiler(img, base_model, vae, seed, positive_cond_base, negative_cond_base, tiler_denoise)
+        else:
+            tiled_image = run_tiler(img, refiner_model, vae, seed, positive_cond_refiner, negative_cond_refiner, tiler_denoise)
         return (tiled_image, img)
+
+class MikeySamplerTiledBaseOnly(MikeySamplerTiled):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"base_model": ("MODEL",), "samples": ("LATENT",),
+                             "positive_cond_base": ("CONDITIONING",), "negative_cond_base": ("CONDITIONING",),
+                             "vae": ("VAE",),
+                             "model_name": (folder_paths.get_filename_list("upscale_models"), ),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                             "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1}),
+                             "tiler_denoise": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.05}),}}
+
+    RETURN_TYPES = ('IMAGE',)
+    RETURN_NAMES = ('image',)
+
+    def phase_one(self, base_model, samples, positive_cond_base, negative_cond_base,
+                  upscale_by, model_name, seed, vae):
+        image_scaler = ImageScale()
+        vaedecoder = VAEDecode()
+        uml = UpscaleModelLoader()
+        upscale_model = uml.load_model(model_name)[0]
+        iuwm = ImageUpscaleWithModel()
+        # step 1 run base model low cfg
+        sample1 = common_ksampler(base_model, seed, 30, 5, 'dpmpp_3m_sde_gpu', 'exponential', positive_cond_base, negative_cond_base, samples,
+                                  start_step=0, last_step=14, force_full_denoise=False)[0]
+        # step 2 run base model high cfg
+        sample2 = common_ksampler(base_model, seed+1, 32, 9.5, 'dpmpp_3m_sde_gpu', 'exponential', positive_cond_base, negative_cond_base, sample1,
+                                  disable_noise=True, start_step=15, force_full_denoise=True)[0]
+        # step 3 upscale image using a simple AI image upscaler
+        pixels = vaedecoder.decode(vae, sample2)[0]
+        org_width, org_height = pixels.shape[2], pixels.shape[1]
+        img = iuwm.upscale(upscale_model, image=pixels)[0]
+        upscaled_width, upscaled_height = int(org_width * upscale_by // 8 * 8), int(org_height * upscale_by // 8 * 8)
+        img = image_scaler.upscale(img, 'nearest-exact', upscaled_width, upscaled_height, 'center')[0]
+        return img, upscaled_width, upscaled_height
+
+    def adjust_start_step(self, image_complexity, hires_strength=1.0):
+        image_complexity /= 24
+        if image_complexity > 1:
+            image_complexity = 1
+        image_complexity = min([0.55, image_complexity]) * hires_strength
+        return min([32, 32 - int(round(image_complexity * 32,0))])
+
+    def run(self, seed, base_model, vae, samples, positive_cond_base, negative_cond_base,
+            model_name, upscale_by=1.0, tiler_denoise=0.25,
+            upscale_method='normal'):
+        # phase 1: run base, refiner, then upscaler model
+        img, upscaled_width, upscaled_height = self.phase_one(base_model, samples, positive_cond_base, negative_cond_base,
+                                                              upscale_by, model_name, seed, vae)
+        print('img shape: ', img.shape)
+        # phase 2: run tiler
+        img = tensor2pil(img)
+        tiled_image = run_tiler(img, base_model, vae, seed, positive_cond_base, negative_cond_base, tiler_denoise)
+        #final_image = pil2tensor(tiled_image)
+        return (tiled_image,)
 
 class PromptWithSDXL:
     @classmethod
@@ -2245,6 +2181,7 @@ NODE_CLASS_MAPPINGS = {
     'Mikey Sampler': MikeySampler,
     'Mikey Sampler Base Only': MikeySamplerBaseOnly,
     'Mikey Sampler Tiled': MikeySamplerTiled,
+    'Mikey Sampler Tiled Base Only': MikeySamplerTiledBaseOnly,
     'AddMetaData': AddMetaData,
     'SaveMetaData': SaveMetaData,
     'HaldCLUT ': HaldCLUT,
@@ -2275,6 +2212,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Mikey Sampler': 'Mikey Sampler',
     'Mikey Sampler Base Only': 'Mikey Sampler Base Only',
     'Mikey Sampler Tiled': 'Mikey Sampler Tiled',
+    'Mikey Sampler Tiled Base Only': 'Mikey Sampler Tiled Base Only',
     'AddMetaData': 'AddMetaData (Mikey)',
     'SaveMetaData': 'SaveMetaData (Mikey)',
     'HaldCLUT': 'HaldCLUT (Mikey)',
