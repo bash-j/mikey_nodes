@@ -2161,13 +2161,22 @@ class ImageCaption:
 
     @classmethod
     def INPUT_TYPES(cls):
-        cls.font_dir = os.path.join(folder_paths.base_path, 'fonts')
-        cls.font_files = [os.path.join(cls.font_dir, f) for f in os.listdir(cls.font_dir) if os.path.isfile(os.path.join(cls.font_dir, f))]
-        cls.font_file_names = [os.path.basename(f) for f in cls.font_files]
-        print(cls.font_file_names)
-        return {'required': {'image': ('IMAGE',),
-                             'font': (cls.font_file_names, {'default': cls.font_file_names[0]}),
-                             'caption': ('STRING', {'multiline': True, 'default': 'Caption'})}}
+        # check if path exists
+        if os.path.exists(os.path.join(folder_paths.base_path, 'fonts')):
+            cls.font_dir = os.path.join(folder_paths.base_path, 'fonts')
+            cls.font_files = [os.path.join(cls.font_dir, f) for f in os.listdir(cls.font_dir) if os.path.isfile(os.path.join(cls.font_dir, f))]
+            cls.font_file_names = [os.path.basename(f) for f in cls.font_files]
+            return {'required': {'image': ('IMAGE',),
+                        'font': (cls.font_file_names, {'default': cls.font_file_names[0]}),
+                        'caption': ('STRING', {'multiline': True, 'default': 'Caption'})}}
+        else:
+            cls.font_dir = None
+            cls.font_files = None
+            cls.font_file_names = None
+            return {'required': {'image': ('IMAGE',),
+                    'font': ('STRING', {'default': 'Path to font file'}),
+                    'caption': ('STRING', {'multiline': True, 'default': 'Caption'})}}
+
 
     RETURN_TYPES = ('IMAGE',)
     RETURN_NAMES = ('image',)
@@ -2183,7 +2192,13 @@ class ImageCaption:
         caption_height = 40  # You can adjust this value as needed
 
         # Set up the font
-        font_file = os.path.join(self.font_dir, font)
+        if self.font_dir is None:
+            font_file = font
+            # check if font file exists
+            if not os.path.isfile(font_file):
+                raise Exception('Font file does not exist: ' + font_file)
+        else:
+            font_file = os.path.join(self.font_dir, font)
         font = ImageFont.truetype(font_file, 32)
         text_width, text_height = font.getsize(caption)
 
