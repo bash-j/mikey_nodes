@@ -52,14 +52,18 @@ The format needs to look like the following example:
 }
 ```
 
-## Mikey Sampler
+## Mikey Sampler and Mikey Sampler Base Only
 ![image](https://github.com/bash-j/mikey_nodes/assets/3195567/beb24edb-4655-4d00-933a-e3fa2304aef2)
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/d7e1e34a-c84b-47c7-8c6c-cf2278cd1570)
 
 Example workflow: mikey_node_workflow.json
 
 This is a sampler node as a companion to the Prompt with Style node, to allow for very straightforward image generation with SDXL.
 
 The node uses a base -> refiner -> upscale with model -> base to produce the final image. It has an inbuilt image complexity detection function to make sure there aren't too many steps run on the final base sampler which can scramble faces and other simple areas on a large image. 
+
+The Base Only version of the sampler uses a slightly different approach. It uses a base -> base -> upscale with model -> base to produce the final image.
+The other key difference with the Base Only version is it skips a step in the middle and adds it to the end. This is a trick which adds extra detail to the image. The smooth step number will add even more extra steps to the end. This might be required if you have an image with a plain background and are seeing some spotty effects created by the skip step method. Usually only 1 extra step is required to clean up the spots. You can also go -1 for very busy images for even more detail.
 
 model_name is for the image uspcale model. These can be found at [OpenModelDB](https://openmodeldb.info/) and place them in the `ComfyUI\models\upscale_models` directory. I recommend lollipop as it provides a good balanced image that is not too sharp. If you want lots of sharp details, then try the NMKD Superscale or 4x-UltraSharp.
 
@@ -68,6 +72,12 @@ The seed is used by the samplers.
 The upscale_by setting is how large you want the final image to be before it runs the last base sampler over the image. A value of 1 will output the original image size. 2 will be 2x the size of the original.
 
 The highres_strength setting allows you to control this last stage and how much detail it adds. Setting of 1 is the sweet spot I found didn't scramble faces in a few test images. Dial it down if you are still getting scrambled images, or turn it up if you want to add more detail. 
+
+## Mikey Sampler Tiled and Mikey Sampler Tiled Base Only
+
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/8c10a872-4d62-4053-a772-cc36c22ac11c)
+
+These samplers use a tiled approach to resample the image after the upscale model has upscaled the image, to help enhance the image with more details.
 
 ## Style Conditioner
 ![image](https://github.com/bash-j/mikey_nodes/assets/3195567/b742b8a4-6ab3-4311-b278-db8bda66b5ce)
@@ -85,6 +95,52 @@ This node allows you to select from a range of different aspect ratios.
 ![image](https://github.com/bash-j/mikey_nodes/assets/3195567/784d7b92-dfc7-4f79-9c81-272605ab7934)
 
 This node allows you to enter your own aspect ratio or image size from wherever, and it will make it fit under 1024x1024 resolution.
+
+## Preset Ratio Selector
+
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/9de36a8c-5ac9-46be-92e6-3bfcf644c95e)
+
+This node requires a `user_ratio_presets.json` file in the root directory of ComfyUI. This is an example of a preset:
+
+```
+{
+    "ratio_presets": {
+        "1024x1024 (AR 1:1 / DEC 1.0:1)": {
+            "custom_latent_w": 1024,
+            "custom_latent_h": 1024,
+            "cte_w": 1024,
+            "cte_h": 1024,
+            "target_w": 4096,
+            "target_h": 4096,
+            "crop_w": 0,
+            "crop_h": 0
+        },
+}
+```
+
+There is a file created by masslevel included in mikey_nodes directory called `user_ratio_presets.json.example`. Rename it to `user_ratio_presets.json` and copy it to the ComfyUI root directory. It contains all of the recommended resolutions from SAI and the correct clipt text encoder and target sizes.
+
+It is a really powerful and convenient ratio selector, because you can create all sorts of combinations for the latent image size, clip text encoder image size, target size and crop coordinates.
+
+The swap axis option will rotate the dimensions by 90 degrees if set to true.
+
+If use preset seed is set to true, it will use the seed number to select one of the available presets. This can be used to cycle or randomly select presets, which is super convenient. 
+
+## Ratio Advanced
+
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/f684bce4-c18d-40ec-a0a7-a65b068b101e)
+
+This node is the big brother to Preset Ratio Selector. It let's you select a preset like with Preset Ratio Selector, but there is also lots of options for customisation.
+
+When creating a latent image you need to set the width and height. But the Clip Text Encoder for SDXL Base Model also requires width and height, target width and height, and crop width and height.
+
+This node has options to setup the dimensions for each of these using different methods:
+
+ * Select a ratio from the select widget, or choose custom to enter your own dimensions.
+ * If you select custom, you need to fill in the width and height options.
+ * If you enter a number into the mult input e.g. cte_mult (clip text encoder) it will multiply the latent width and height to create the width and height for that dimension.
+ * If you enter a number into the res input, it will create a width and height that fits into the res^2 image size while maintining the same ratio as the latent width and height.
+ * If you enter a number into the fit_size input, it will create a width and height that has the largest dimension equal to fit_size while maintaining the same ratio as the latent width and height.
 
 ## Resize Image for SDXL
 ![image](https://github.com/bash-j/mikey_nodes/assets/3195567/85cd45ef-933b-4d95-9c73-717b944df7e2)
@@ -134,11 +190,30 @@ This node should pick up the info stored in the prompt and extra_pnginfo data an
 
 This will apply a HaldCLUT to an image to change the colors, which tend to imitate the look of the film or filter. I have included some in this package, but you can find more png files at [rawtherapee.com](http://rawtherapee.com/shared/HaldCLUT.zip)
 
-## VAE Decode 6GB (deprecated)
+## Image Caption
 
-This node is a bandaid fix for Mikey's 3060 6GB graphics card to keep VRAM usage below 6GB.
+This node will add a caption bar to the bottom of the image. Useful for adding a prompt or the name of the checkpoint to the image.
 
-You shouldn't need this anymore since there was an update to comfyui to fix the issue.
+If you create a font folder in the base directory of comfyui e.g. `C:\ComfyUI\fonts` and place ttf files in that folder, the widget will automatically be a drop down selection with the files in that directory. Otherwise it will be a text input for you to put the full path to the font file.
+
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/32bf15f3-9aeb-459d-af11-935ccc6b0506)
+
+## Seed String
+
+![image](https://github.com/bash-j/mikey_nodes/assets/3195567/46df9bf4-03d6-473d-801d-d5f563480afd)
+
+This node creates a random number or Seed. It outputs the seed as a Integer and also a String version which can be used to add to metadata or wherever you want.
+
+## Int to String
+
+Converts an integer to a string.
+
+## Float to String
+
+Converts a float to a string.
+
+## Removed Nodes
+ - VAE Decode 6GB
 
 ## Installation
 
