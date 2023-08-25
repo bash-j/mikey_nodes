@@ -9,7 +9,7 @@ import re
 import sys
 
 import numpy as np
-from PIL import Image, ImageOps, ImageDraw, ImageFilter, ImageChops
+from PIL import Image, ImageOps, ImageDraw, ImageFilter, ImageChops, ImageFont
 from PIL.PngImagePlugin import PngInfo
 import torch
 import torch.nn.functional as F
@@ -2157,6 +2157,48 @@ class IntegerAndString:
         seed_string = str(seed)
         return (seed, seed_string,)
 
+class ImageCaption:
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        cls.font_dir = os.path.join(folder_paths.base_path, 'fonts')
+        cls.font_files = [os.path.join(cls.font_dir, f) for f in os.listdir(cls.font_dir) if os.path.isfile(os.path.join(cls.font_dir, f))]
+        cls.font_file_names = [os.path.basename(f) for f in cls.font_files]
+        print(cls.font_file_names)
+        return {'required': {'image': ('IMAGE',),
+                             'font': (cls.font_file_names, {'default': cls.font_file_names[0]}),
+                             'caption': ('STRING', {'multiline': True, 'default': 'Caption'})}}
+
+    RETURN_TYPES = ('IMAGE',)
+    RETURN_NAMES = ('image',)
+    FUNCTION = 'caption'
+    CATEGORY = 'Mikey/Image'
+
+    def caption(self, image, font, caption):
+        # Convert tensor to PIL image
+        orig_image = tensor2pil(image)
+        width, height = orig_image.size
+
+        # Define the height for the caption
+        caption_height = 40  # You can adjust this value as needed
+
+        # Set up the font
+        font_file = os.path.join(self.font_dir, font)
+        font = ImageFont.truetype(font_file, 32)
+        text_width, text_height = font.getsize(caption)
+
+        # Create the caption bar
+        text_image = Image.new('RGB', (width, caption_height), (0, 0, 0))
+        draw = ImageDraw.Draw(text_image)
+        draw.text(((width - text_width) / 2, (caption_height - text_height) / 2), caption, (255, 255, 255), font=font)
+
+        # Combine the images
+        combined_image = Image.new('RGB', (width, height + caption_height), (0, 0, 0))
+        combined_image.paste(text_image, (0, height))
+        combined_image.paste(orig_image, (0, 0))
+
+        return (pil2tensor(combined_image),)
+
 NODE_CLASS_MAPPINGS = {
     'Wildcard Processor': WildcardProcessor,
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
@@ -2186,6 +2228,7 @@ NODE_CLASS_MAPPINGS = {
     'SaveMetaData': SaveMetaData,
     'HaldCLUT ': HaldCLUT,
     'Seed String': IntegerAndString,
+    'Image Caption': ImageCaption,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -2217,4 +2260,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'SaveMetaData': 'SaveMetaData (Mikey)',
     'HaldCLUT': 'HaldCLUT (Mikey)',
     'Seed String': 'Seed String (Mikey)',
+    'Image Caption': 'Image Caption (Mikey)',
 }
