@@ -97,6 +97,27 @@ def read_ratios():
             ratio_sizes.append(ratio)
     return ratio_sizes, ratio_dict
 
+def read_ratio_presets():
+    p = os.path.dirname(os.path.realpath(__file__))
+    file_path = os.path.join(p, 'ratio_presets.json')
+    with open(file_path, 'r') as file:
+        data = json.load(file)
+    ratio_presets = list(data['ratio_presets'].keys())
+    ratio_preset_dict = data['ratio_presets']
+    # user_ratio_presets.json
+    user_ratio_presets_path = os.path.join(folder_paths.base_path, 'user_ratio_presets.json')
+    # check if file exists
+    if os.path.isfile(user_ratio_presets_path):
+        # read json and update ratio_dict
+        with open(user_ratio_presets_path, 'r') as file:
+            user_data = json.load(file)
+        for ratio in user_data['ratio_presets']:
+            ratio_preset_dict[ratio] = user_data['ratio_presets'][ratio]
+            ratio_presets.append(ratio)
+    # remove duplicate presets
+    ratio_presets = sorted(list(set(ratio_presets)))
+    return ratio_presets, ratio_preset_dict
+
 def read_styles():
     p = os.path.dirname(os.path.realpath(__file__))
     file_path = os.path.join(p, 'styles.json')
@@ -134,15 +155,15 @@ def read_styles():
             styles.append(style)
     return styles, pos_style, neg_style
 
-def read_ratio_presets():
-    file_path = os.path.join(folder_paths.base_path, 'user_ratio_presets.json')
-    if os.path.isfile(file_path):
-        with open(file_path, 'r') as file:
-            data = json.load(file)
-        ratio_presets = list(data['ratio_presets'].keys())
-        return ratio_presets, data['ratio_presets']
-    else:
-        return ['none'], {'none': None}
+#def read_ratio_presets():
+#    file_path = os.path.join(folder_paths.base_path, 'user_ratio_presets.json')
+#    if os.path.isfile(file_path):
+#        with open(file_path, 'r') as file:
+#            data = json.load(file)
+#        ratio_presets = list(data['ratio_presets'].keys())
+#        return ratio_presets, data['ratio_presets']
+#    else:
+#        return ['none'], {'none': None}
 
 def find_and_replace_wildcards(prompt, offset_seed, debug=False):
     # wildcards use the __file_name__ syntax with optional |word_to_find
