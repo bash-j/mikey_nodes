@@ -100,7 +100,7 @@ This node allows you to enter your own aspect ratio or image size from wherever,
 
 ![image](https://github.com/bash-j/mikey_nodes/assets/3195567/9de36a8c-5ac9-46be-92e6-3bfcf644c95e)
 
-This node requires a `user_ratio_presets.json` file in the root directory of ComfyUI. This is an example of a preset:
+This node will read an optional `user_ratio_presets.json` file in the root directory of ComfyUI. This is an example of a preset:
 
 ```
 {
@@ -118,7 +118,7 @@ This node requires a `user_ratio_presets.json` file in the root directory of Com
 }
 ```
 
-There is a file created by masslevel included in mikey_nodes directory called `user_ratio_presets.json.example`. Rename it to `user_ratio_presets.json` and copy it to the ComfyUI root directory. It contains all of the recommended resolutions from SAI and the correct clipt text encoder and target sizes.
+There is a file created by masslevel included in mikey_nodes directory called `ratio_presets.json`. It contains all of the recommended resolutions from SAI and the correct clipt text encoder and target sizes. This file will automatically be read and populated into the selection widget.
 
 It is a really powerful and convenient ratio selector, because you can create all sorts of combinations for the latent image size, clip text encoder image size, target size and crop coordinates.
 
