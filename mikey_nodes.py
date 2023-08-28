@@ -7,6 +7,7 @@ import os
 import random
 import re
 import sys
+from textwrap import wrap
 
 import numpy as np
 from PIL import Image, ImageOps, ImageDraw, ImageFilter, ImageChops, ImageFont
@@ -307,8 +308,25 @@ def extract_and_load_loras(text, model, clip):
             # return (model_lora, clip_lora)
             # apply the lora to the clip
             model, clip_lora = LoraLoader.load_lora(model, clip, lora_filename, lora_multiplier, lora_multiplier)
-            stripped_text = stripped_text.replace(f'<lora:{lora_filename}:{lora_multiplier}>', '')
+    # strip the lora prompts from the text
+    stripped_text = re.sub(lora_re, '', stripped_text)
     return model, clip, stripped_text
+
+def process_random_syntax(text, seed):
+        # The syntax for a random number is <random:lower_bound:upper_bound>
+        # For example, <random:-1:0.5> will generate a random number between -1 and 0.5
+        random.seed(seed)
+        random_re = r'<random:(-?\d*\.?\d+):(-?\d*\.?\d+)>'
+        matches = re.findall(random_re, text)
+
+        for match in matches:
+            lower_bound, upper_bound = map(float, match)
+            random_value = random.uniform(lower_bound, upper_bound)
+            random_value = round(random_value, 4)
+            # Replace the syntax with the generated number
+            text = text.replace(f'<random:{lower_bound}:{upper_bound}>', str(random_value))
+
+        return text
 
 def read_cluts():
     p = os.path.dirname(os.path.realpath(__file__))
@@ -1203,7 +1221,10 @@ class PromptWithStyle:
     OUTPUT_NODE = True
 
     def start(self, positive_prompt, negative_prompt, style, ratio_selected, batch_size, seed):
-        # first process wildcards
+        # process random syntax
+        positive_prompt = process_random_syntax(positive_prompt, seed)
+        negative_prompt = process_random_syntax(negative_prompt, seed)
+        # process wildcards
         print('Positive Prompt Entered:', positive_prompt)
         pos_prompt = find_and_replace_wildcards(positive_prompt, seed, debug=True)
         print('Positive Prompt:', pos_prompt)
@@ -1323,6 +1344,10 @@ class PromptWithSDXL:
     OUTPUT_NODE = True
 
     def start(self, positive_prompt, negative_prompt, positive_style, negative_style, ratio_selected, batch_size, seed):
+        # process random syntax
+        positive_prompt = process_random_syntax(positive_prompt, seed)
+        negative_prompt = process_random_syntax(negative_prompt, seed)
+        # process wildcards
         positive_prompt = find_and_replace_wildcards(positive_prompt, seed)
         negative_prompt = find_and_replace_wildcards(negative_prompt, seed)
         width = self.ratio_dict[ratio_selected]["width"]
@@ -1503,6 +1528,10 @@ class PromptWithStyleV3:
               'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
         add_metadata_to_dict(prompt_with_style, width=width, height=height, target_width=target_width, target_height=target_height,
                              refiner_width=refiner_width, refiner_height=refiner_height, crop_w=0, crop_h=0)
+        # process random syntax
+        positive_prompt = process_random_syntax(positive_prompt, seed)
+        negative_prompt = process_random_syntax(negative_prompt, seed)
+
         # check for $style in prompt, split the prompt into prompt and style
         user_added_style = False
         if '$style' in positive_prompt:
@@ -1649,6 +1678,114 @@ class PromptWithStyleV3:
                 sdxl_pos_cond, sdxl_neg_cond,
                 refiner_pos_cond, refiner_neg_cond,
                 pos_prompt_, neg_prompt_, {'extra_pnginfo': extra_pnginfo})
+
+class LoraSyntaxProcessor:
+    def __init__(self):
+        self.loaded_lora = None
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+                    "model": ("MODEL",),
+                    "clip": ("CLIP",),
+                    "text": ("STRING", {"multiline": True, "default": "<lora:filename:weight>"})
+                    }
+                }
+
+    RETURN_TYPES = ('MODEL','CLIP','STRING','STRING')
+    RETURN_NAMES = ('model','clip','text','unprocessed_text')
+    FUNCTION = 'process'
+    CATEGORY = 'Mikey/Lora'
+
+    def process(self, model, clip, text, seed):
+        # process random syntax
+        text = process_random_syntax(text, seed)
+        lora_re = r'<lora:(.*?)(?::(.*?))?>'
+        # find all lora prompts
+        lora_prompts = re.findall(lora_re, text)
+        stripped_text = text
+        # if we found any lora prompts
+        if len(lora_prompts) > 0:
+            # loop through each lora prompt
+            for lora_prompt in lora_prompts:
+                # get the lora filename
+                lora_filename = lora_prompt[0]
+                # check for file extension in filename
+                if '.safetensors' not in lora_filename:
+                    lora_filename += '.safetensors'
+                # get the lora multiplier
+                lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
+                print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
+                model, clip_lora = LoraLoader.load_lora(self, model, clip, lora_filename, lora_multiplier, lora_multiplier)
+        # strip lora syntax from text
+        stripped_text = re.sub(lora_re, '', stripped_text)
+        return (model, clip_lora, stripped_text,  text, )
+
+class WildcardAndLoraSyntaxProcessor:
+    def __init__(self):
+        self.loaded_lora = None
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {
+                    "model": ("MODEL",),
+                    "clip": ("CLIP",),
+                    "text": ("STRING", {"multiline": True, "default": "<lora:filename:weight>"}),
+                    "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                    }
+                }
+
+    RETURN_TYPES = ('MODEL','CLIP','STRING','STRING')
+    RETURN_NAMES = ('model','clip','text','unprocessed_text')
+    FUNCTION = 'process'
+    CATEGORY = 'Mikey/Lora'
+
+    def extract_and_load_loras(self, text, model, clip):
+        # load loras detected in the prompt text
+        # The text for adding LoRA to the prompt, <lora:filename:multiplier>, is only used to enable LoRA, and is erased from prompt afterwards
+        # The multiplier is optional, and defaults to 1.0
+        # We update the model and clip, and return the new model and clip with the lora prompt stripped from the text
+        # If multiple lora prompts are detected we chain them together like: original clip > clip_with_lora1 > clip_with_lora2 > clip_with_lora3 > etc
+        lora_re = r'<lora:(.*?)(?::(.*?))?>'
+        # find all lora prompts
+        lora_prompts = re.findall(lora_re, text)
+        stripped_text = text
+        # if we found any lora prompts
+        if len(lora_prompts) > 0:
+            # loop through each lora prompt
+            for lora_prompt in lora_prompts:
+                # get the lora filename
+                lora_filename = lora_prompt[0]
+                # check for file extension in filename
+                if '.safetensors' not in lora_filename:
+                    lora_filename += '.safetensors'
+                # get the lora multiplier
+                lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
+                print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
+                # apply the lora to the clip using the LoraLoader.load_lora function
+                # def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
+                # ...
+                # return (model_lora, clip_lora)
+                # apply the lora to the clip
+                model, clip_lora = LoraLoader.load_lora(self, model, clip, lora_filename, lora_multiplier, lora_multiplier)
+        # strip lora syntax from text
+        stripped_text = re.sub(lora_re, '', stripped_text)
+        return model, clip, stripped_text
+
+    def process(self, model, clip, text, seed):
+        # first process wildcards
+        text_ = find_and_replace_wildcards(text, seed, True)
+        if len(text_) != len(text):
+            seed = random.randint(0, 1000000)
+        else:
+            seed = 0
+        # process random syntax
+        text_ = process_random_syntax(text_, seed)
+        # extract and load loras
+        model, clip, stripped_text = self.extract_and_load_loras(text_, model, clip)
+        # process wildcards again
+        stripped_text = find_and_replace_wildcards(stripped_text, seed, True)
+        return (model, clip, stripped_text, text_, )
 
 class StyleConditioner:
     @classmethod
@@ -1957,17 +2094,18 @@ def stitch_images(upscaled_size, tiles):
     tensor_final = tensor_expanded.permute(0, 2, 3, 1)
     return tensor_final
 
-def ai_upscale(tile, base_model, vae, seed, positive_cond_base, negative_cond_base, start_step=11):
+def ai_upscale(tile, base_model, vae, seed, positive_cond_base, negative_cond_base, start_step=11, use_complexity_score='true'):
     """Upscale a tile using the AI model."""
     vaedecoder = VAEDecode()
     vaeencoder = VAEEncode()
     tile = pil2tensor(tile)
     complexity = calculate_image_complexity(tile)
     print('Tile Complexity:', complexity)
-    if complexity < 8:
-        start_step = 15
-    if complexity < 6.5:
-        start_step = 18
+    if use_complexity_score == 'true':
+        if complexity < 8:
+            start_step = 15
+        if complexity < 6.5:
+            start_step = 18
     encoded_tile = vaeencoder.encode(vae, tile)[0]
     tile = common_ksampler(base_model, seed, 20, 7, 'dpmpp_3m_sde_gpu', 'exponential',
                            positive_cond_base, negative_cond_base, encoded_tile,
@@ -1975,13 +2113,13 @@ def ai_upscale(tile, base_model, vae, seed, positive_cond_base, negative_cond_ba
     tile = vaedecoder.decode(vae, tile)[0]
     return tile
 
-def run_tiler(enlarged_img, base_model, vae, seed, positive_cond_base, negative_cond_base, denoise=0.25):
+def run_tiler(enlarged_img, base_model, vae, seed, positive_cond_base, negative_cond_base, denoise=0.25, use_complexity_score='true'):
     # Split the enlarged image into overlapping tiles
     tiles = split_image(enlarged_img)
 
     # Resample each tile using the AI model
     start_step = int(20 - (20 * denoise))
-    resampled_tiles = [(coords, ai_upscale(tile, base_model, vae, seed, positive_cond_base, negative_cond_base, start_step)) for coords, tile in tiles]
+    resampled_tiles = [(coords, ai_upscale(tile, base_model, vae, seed, positive_cond_base, negative_cond_base, start_step, use_complexity_score)) for coords, tile in tiles]
 
     # Stitch the tiles to get the final upscaled image
     result = stitch_images(enlarged_img.size, resampled_tiles)
@@ -2039,6 +2177,96 @@ class MikeySamplerTiled:
             tiled_image = run_tiler(img, base_model, vae, seed, positive_cond_base, negative_cond_base, tiler_denoise)
         else:
             tiled_image = run_tiler(img, refiner_model, vae, seed, positive_cond_refiner, negative_cond_refiner, tiler_denoise)
+        return (tiled_image, img)
+
+class MikeySamplerTiledAdvanced:
+    @classmethod
+    def INPUT_TYPES(s):
+
+        return {"required": {"base_model": ("MODEL",),
+                             "refiner_model": ("MODEL",),
+                             "samples": ("LATENT",), "vae": ("VAE",),
+                             "positive_cond_base": ("CONDITIONING",), "negative_cond_base": ("CONDITIONING",),
+                             "positive_cond_refiner": ("CONDITIONING",), "negative_cond_refiner": ("CONDITIONING",),
+                             "model_name": (folder_paths.get_filename_list("upscale_models"), ),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                             "denoise_image": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.01}),
+                             "steps": ("INT", {"default": 30, "min": 1, "max": 1000}),
+                             "smooth_step": ("INT", {"default": 1, "min": -1, "max": 100}),
+                             "cfg": ("FLOAT", {"default": 6.5, "min": 0.0, "max": 1000.0, "step": 0.1}),
+                             "sampler_name": (comfy.samplers.KSampler.SAMPLERS, ),
+                             "scheduler": (comfy.samplers.KSampler.SCHEDULERS, ),
+                             "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1}),
+                             "tiler_denoise": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.05}),
+                             "tiler_model": (["base", "refiner"], {"default": "base"}),
+                             "use_complexity_score": (['true','false'], {"default": 'true'}),},
+                "optional": {"image_optional": ("IMAGE",),}}
+
+    RETURN_TYPES = ('IMAGE', 'IMAGE',)
+    RETURN_NAMES = ('tiled_image', 'upscaled_image',)
+    FUNCTION = 'run'
+    CATEGORY = 'Mikey/Sampling'
+
+    #def phase_one(self, base_model, refiner_model, samples, positive_cond_base, negative_cond_base,
+    #              positive_cond_refiner, negative_cond_refiner, upscale_by, model_name, seed, vae):
+    # updated phase_one
+    def phase_one(self, base_model, refiner_model, samples, positive_cond_base, negative_cond_base,
+                  positive_cond_refiner, negative_cond_refiner, upscale_by, model_name, seed, vae, denoise_image,
+                  steps, smooth_step, cfg, sampler_name, scheduler):
+        image_scaler = ImageScale()
+        vaedecoder = VAEDecode()
+        uml = UpscaleModelLoader()
+        upscale_model = uml.load_model(model_name)[0]
+        iuwm = ImageUpscaleWithModel()
+        # step 1 run base model
+        start_step = int(steps - (steps * denoise_image))
+        if start_step > steps // 2:
+            last_step = steps - 1
+        else:
+            # last step should be 1/2 of steps - 1 step
+            if start_step % 2 == 0:
+                last_step = steps // 2 - 1
+            else:
+                last_step = steps // 2
+        print(f'base model start_step: {start_step}, last_step: {last_step}')
+        sample1 = common_ksampler(base_model, seed, steps, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, samples,
+                                  start_step=start_step, last_step=last_step, force_full_denoise=False)[0]
+        # step 2 run refiner model
+        start_step = last_step + 1
+        total_steps = steps + smooth_step
+        print(f'refiner model start_step: {start_step}, last_step: {total_steps}')
+        sample2 = common_ksampler(refiner_model, seed, total_steps, cfg, sampler_name, scheduler, positive_cond_refiner, negative_cond_refiner, sample1,
+                                  disable_noise=True, start_step=start_step, force_full_denoise=True)[0]
+        # step 3 upscale image using a simple AI image upscaler
+        pixels = vaedecoder.decode(vae, sample2)[0]
+        org_width, org_height = pixels.shape[2], pixels.shape[1]
+        img = iuwm.upscale(upscale_model, image=pixels)[0]
+        upscaled_width, upscaled_height = int(org_width * upscale_by // 8 * 8), int(org_height * upscale_by // 8 * 8)
+        img = image_scaler.upscale(img, 'nearest-exact', upscaled_width, upscaled_height, 'center')[0]
+        return img, upscaled_width, upscaled_height
+
+    #def run(self, seed, base_model, refiner_model, vae, samples, positive_cond_base, negative_cond_base,
+    #        positive_cond_refiner, negative_cond_refiner, model_name, upscale_by=1.0, tiler_denoise=0.25,
+    #        upscale_method='normal', tiler_model='base'):
+    # updated run
+    def run(self, seed, base_model, refiner_model, vae, samples, positive_cond_base, negative_cond_base,
+            positive_cond_refiner, negative_cond_refiner, model_name, upscale_by=1.0, tiler_denoise=0.25,
+            upscale_method='normal', tiler_model='base', denoise_image=0.25, steps=30, smooth_step=0, cfg=6.5,
+            sampler_name='dpmpp_3m_sde_gpu', scheduler='exponential', use_complexity_score='true', image_optional=None):
+        # if image not none replace samples with decoded image
+        if image_optional is not None:
+            vaeencoder = VAEEncode()
+            samples = vaeencoder.encode(vae, image_optional)[0]
+        # phase 1: run base, refiner, then upscaler model
+        img, upscaled_width, upscaled_height = self.phase_one(base_model, refiner_model, samples, positive_cond_base, negative_cond_base,
+                                                              positive_cond_refiner, negative_cond_refiner, upscale_by, model_name, seed, vae, denoise_image,
+                                                              steps, smooth_step, cfg, sampler_name, scheduler)
+        # phase 2: run tiler
+        img = tensor2pil(img)
+        if tiler_model == 'base':
+            tiled_image = run_tiler(img, base_model, vae, seed, positive_cond_base, negative_cond_base, tiler_denoise, use_complexity_score)
+        else:
+            tiled_image = run_tiler(img, refiner_model, vae, seed, positive_cond_refiner, negative_cond_refiner, tiler_denoise, use_complexity_score)
         return (tiled_image, img)
 
 class MikeySamplerTiledBaseOnly(MikeySamplerTiled):
@@ -2204,29 +2432,55 @@ class ImageCaption:
     FUNCTION = 'caption'
     CATEGORY = 'Mikey/Image'
 
+    def wrap_text(self, text, font, max_width):
+        """Wrap text to fit inside a specified width when rendered."""
+        wrapped_lines = []
+        for line in text.split('\n'):
+            # Split lines by spaces to avoid breaking words
+            words = line.split(' ')
+            new_line = words[0]
+            for word in words[1:]:
+                # If line can fit the word, add it
+                if font.getsize(new_line + ' ' + word)[0] <= max_width:
+                    new_line += ' ' + word
+                else:
+                    wrapped_lines.append(new_line)
+                    new_line = word
+            wrapped_lines.append(new_line)
+        return wrapped_lines
+
     def caption(self, image, font, caption):
         # Convert tensor to PIL image
         orig_image = tensor2pil(image)
         width, height = orig_image.size
 
-        # Define the height for the caption
-        caption_height = 40  # You can adjust this value as needed
-
         # Set up the font
         if self.font_dir is None:
             font_file = font
-            # check if font file exists
             if not os.path.isfile(font_file):
                 raise Exception('Font file does not exist: ' + font_file)
         else:
             font_file = os.path.join(self.font_dir, font)
         font = ImageFont.truetype(font_file, 32)
-        text_width, text_height = font.getsize(caption)
+
+        # Wrap the text
+        max_width = width
+        wrapped_lines = self.wrap_text(caption, font, max_width)
+
+        # Calculate height needed for wrapped text
+        wrapped_text_height = len(wrapped_lines) * font.getsize('A')[1]  # Estimate using height of letter 'A'
+        caption_height = wrapped_text_height + 25  # A little buffer for better visual appeal
 
         # Create the caption bar
         text_image = Image.new('RGB', (width, caption_height), (0, 0, 0))
         draw = ImageDraw.Draw(text_image)
-        draw.text(((width - text_width) / 2, (caption_height - text_height) / 2), caption, (255, 255, 255), font=font)
+
+        y_position = (caption_height - wrapped_text_height) // 2
+        for line in wrapped_lines:
+            text_width, text_height = font.getsize(line)
+            x_position = (width - text_width) // 2
+            draw.text((x_position, y_position), line, (255, 255, 255), font=font)
+            y_position += text_height
 
         # Combine the images
         combined_image = Image.new('RGB', (width, height + caption_height), (0, 0, 0))
@@ -2254,9 +2508,12 @@ NODE_CLASS_MAPPINGS = {
     'Prompt With Style': PromptWithStyle,
     'Prompt With Style V2': PromptWithStyleV2,
     'Prompt With Style V3': PromptWithStyleV3,
+    'LoraSyntaxProcessor': LoraSyntaxProcessor,
+    'WildcardAndLoraSyntaxProcessor': WildcardAndLoraSyntaxProcessor,
     'Prompt With SDXL': PromptWithSDXL,
     'Style Conditioner': StyleConditioner,
     'Mikey Sampler': MikeySampler,
+    'MikeySamplerTiledAdvanced': MikeySamplerTiledAdvanced,
     'Mikey Sampler Base Only': MikeySamplerBaseOnly,
     'Mikey Sampler Tiled': MikeySamplerTiled,
     'Mikey Sampler Tiled Base Only': MikeySamplerTiledBaseOnly,
@@ -2284,6 +2541,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Batch Resize Image for SDXL': 'Batch Resize Image for SDXL (Mikey)',
     'Batch Crop Resize Inplace': 'Batch Crop Resize Inplace (Mikey)',
     'Prompt With Style V3': 'Prompt With Style (Mikey)',
+    'LoraSyntaxProcessor': 'Lora Syntax Processor (Mikey)',
+    'WildcardAndLoraSyntaxProcessor': 'Wildcard And Lora Syntax Processor (Mikey)',
     'Prompt With Style': 'Prompt With Style V1 (Mikey)',
     'Prompt With Style V2': 'Prompt With Style V2 (Mikey)',
     'Prompt With SDXL': 'Prompt With SDXL (Mikey)',
@@ -2291,6 +2550,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Mikey Sampler': 'Mikey Sampler',
     'Mikey Sampler Base Only': 'Mikey Sampler Base Only',
     'Mikey Sampler Tiled': 'Mikey Sampler Tiled',
+    'MikeySamplerTiledAdvanced': 'Mikey Sampler Tiled Advanced',
     'Mikey Sampler Tiled Base Only': 'Mikey Sampler Tiled Base Only',
     'AddMetaData': 'AddMetaData (Mikey)',
     'SaveMetaData': 'SaveMetaData (Mikey)',
