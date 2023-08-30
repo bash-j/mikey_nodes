@@ -2489,6 +2489,75 @@ class ImageCaption:
 
         return (pil2tensor(combined_image),)
 
+class TextCombinations:
+    # takes two text inputs and has all options to combine them in different ways
+    # and then send them to two text outputs
+    @classmethod
+    def INPUT_TYPES(s):
+        s.operations = ['text1 to output1 and text2 to output2',
+                        'text1 to output2 and text2 to output1',
+                        'text1 + text2 to output1 and text1 + text2 to output2',
+                        'text1 + text2 to output1 and text1 to output1',
+                        'text1 + text2 to output2 and text1 to output2',
+                        'text1 + text2 to output1 and text2 to output1',
+                        'text1 + text2 to output2 and text2 to output2',
+                        'text1 to output1 and text1 + text2 to output2',
+                        'text1 to output2 and text1 + text2 to output1',
+                        'text2 to output1 and text1 + text2 to output2',
+                        'text2 to output2 and text1 + text2 to output1']
+        return {'required': {'text1': ('STRING', {'multiline': True, 'default': 'Text 1'}),
+                             'text2': ('STRING', {'multiline': True, 'default': 'Text 2'}),
+                             'operation': (s.operations , {'default': 'text1 to output1 and text2 to output2'}),
+                             'use_seed': (['true','false'], {'default': 'false'}),
+                             'seed': ('INT', {'default': 0, 'min': 0, 'max': 0xffffffffffffffff})}}
+
+    RETURN_TYPES = ('STRING','STRING')
+    RETURN_NAMES = ('output1','output2')
+    FUNCTION = 'mix'
+    CATEGORY = 'Mikey/Text'
+
+    def mix(self, text1, text2, operation, use_seed, seed):
+        if use_seed == 'true' and len(self.operations) > 0:
+            # seed is a randomly generated number that can be much larger than the number of presets
+            # we use the seed to select a preset
+            offset = seed % len(self.operations - 1)
+            presets = [p for p in self.operations]
+            operation = presets[offset]
+        if operation == 'text1 to output1 and text2 to output2':
+            output1 = text1
+            output2 = text2
+        elif operation == 'text1 + text2 to output1 and text1 + text2 to output2':
+            output1 = text1 + text2
+            output2 = text1 + text2
+        elif operation == 'text1 to output2 and text2 to output1':
+            output1 = text2
+            output2 = text1
+        elif operation == 'text1 + text2 to output1 and text1 to output1':
+            output1 = text1 + text2
+            output2 = text1
+        elif operation == 'text1 + text2 to output2 and text1 to output2':
+            output1 = text1
+            output2 = text1 + text2
+        elif operation == 'text1 + text2 to output1 and text2 to output1':
+            output1 = text1 + text2
+            output2 = text2
+        elif operation == 'text1 + text2 to output2 and text2 to output2':
+            output1 = text2
+            output2 = text1 + text2
+        elif operation == 'text1 to output1 and text1 + text2 to output2':
+            output1 = text1
+            output2 = text1 + text2
+        elif operation == 'text1 to output2 and text1 + text2 to output1':
+            output1 = text1 + text2
+            output2 = text1
+        elif operation == 'text2 to output1 and text1 + text2 to output2':
+            output1 = text2
+            output2 = text1 + text2
+        elif operation == 'text2 to output2 and text1 + text2 to output1':
+            output1 = text1 + text2
+            output2 = text2
+        return (output1, output2,)
+
 NODE_CLASS_MAPPINGS = {
     'Wildcard Processor': WildcardProcessor,
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
@@ -2522,6 +2591,7 @@ NODE_CLASS_MAPPINGS = {
     'HaldCLUT ': HaldCLUT,
     'Seed String': IntegerAndString,
     'Image Caption': ImageCaption,
+    'TextCombinations': TextCombinations,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -2557,4 +2627,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'HaldCLUT': 'HaldCLUT (Mikey)',
     'Seed String': 'Seed String (Mikey)',
     'Image Caption': 'Image Caption (Mikey)',
+    'TextCombinations': 'TextCombinations (Mikey)',
 }
