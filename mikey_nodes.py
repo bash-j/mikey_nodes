@@ -1,6 +1,7 @@
 import datetime
 from fractions import Fraction
 import importlib.util
+from itertools import product
 import json
 from math import ceil, pow, gcd
 import os
@@ -2489,27 +2490,25 @@ class ImageCaption:
 
         return (pil2tensor(combined_image),)
 
-class TextCombinations:
-    # takes two text inputs and has all options to combine them in different ways
-    # and then send them to two text outputs
+class TextCombinations2:
+    texts = ['text1', 'text2', 'text1 + text2']
+    outputs = ['output1','output2']
+
     @classmethod
-    def INPUT_TYPES(s):
-        s.operations = ['text1 to output1 and text2 to output2',
-                        'text1 to output2 and text2 to output1',
-                        'text1 to output1 and output2',
-                        'text2 to output1 and output2',
-                        'text1 + text2 to output1 and text1 + text2 to output2',
-                        'text1 + text2 to output1 and text1 to output1',
-                        'text1 + text2 to output2 and text1 to output2',
-                        'text1 + text2 to output1 and text2 to output1',
-                        'text1 + text2 to output2 and text2 to output2',
-                        'text1 to output1 and text1 + text2 to output2',
-                        'text1 to output2 and text1 + text2 to output1',
-                        'text2 to output1 and text1 + text2 to output2',
-                        'text2 to output2 and text1 + text2 to output1']
+    def generate_combinations(cls, texts, outputs):
+        operations = []
+        for output1, output2 in product(texts, repeat=len(outputs)):
+            operation = f"{output1} to {outputs[0]}, {output2} to {outputs[1]}"
+            operations.append(operation)
+        return operations
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        cls.operations = cls.generate_combinations(cls.texts, cls.outputs)
         return {'required': {'text1': ('STRING', {'multiline': True, 'default': 'Text 1'}),
                              'text2': ('STRING', {'multiline': True, 'default': 'Text 2'}),
-                             'operation': (s.operations , {'default': 'text1 to output1 and text2 to output2'}),
+                             'operation': (cls.operations, {'default':cls.operations[0]}),
+                             'delimiter': ('STRING', {'default': ' '}),
                              'use_seed': (['true','false'], {'default': 'false'}),
                              'seed': ('INT', {'default': 0, 'min': 0, 'max': 0xffffffffffffffff})}}
 
@@ -2518,53 +2517,100 @@ class TextCombinations:
     FUNCTION = 'mix'
     CATEGORY = 'Mikey/Text'
 
-    def mix(self, text1, text2, operation, use_seed, seed):
+    def mix(self, text1, text2, operation, delimiter, use_seed, seed):
+        text_dict = {'text1': text1, 'text2': text2}
         if use_seed == 'true' and len(self.operations) > 0:
-            # seed is a randomly generated number that can be much larger than the number of presets
-            # we use the seed to select a preset
-            offset = seed % len(self.operations - 1)
-            presets = [p for p in self.operations]
-            operation = presets[offset]
-        if operation == 'text1 to output1 and text2 to output2':
-            output1 = text1
-            output2 = text2
-        elif operation == 'text1 to output2 and text2 to output1':
-            output1 = text2
-            output2 = text1
-        elif operation == 'text1 to output1 and output2':
-            output1 = text1
-            output2 = text1
-        elif operation == 'text2 to output1 and output2':
-            output1 = text2
-            output2 = text2
-        elif operation == 'text1 + text2 to output1 and text1 + text2 to output2':
-            output1 = text1 + text2
-            output2 = text1 + text2
-        elif operation == 'text1 + text2 to output1 and text1 to output1':
-            output1 = text1 + text2
-            output2 = text1
-        elif operation == 'text1 + text2 to output2 and text1 to output2':
-            output1 = text1
-            output2 = text1 + text2
-        elif operation == 'text1 + text2 to output1 and text2 to output1':
-            output1 = text1 + text2
-            output2 = text2
-        elif operation == 'text1 + text2 to output2 and text2 to output2':
-            output1 = text2
-            output2 = text1 + text2
-        elif operation == 'text1 to output1 and text1 + text2 to output2':
-            output1 = text1
-            output2 = text1 + text2
-        elif operation == 'text1 to output2 and text1 + text2 to output1':
-            output1 = text1 + text2
-            output2 = text1
-        elif operation == 'text2 to output1 and text1 + text2 to output2':
-            output1 = text2
-            output2 = text1 + text2
-        elif operation == 'text2 to output2 and text1 + text2 to output1':
-            output1 = text1 + text2
-            output2 = text2
-        return (output1, output2,)
+            offset = seed % len(self.operations)
+            operation = self.operations[offset]
+
+        # Parsing the operation string
+        ops = operation.split(", ")
+        output_texts = [op.split(" to ")[0] for op in ops]
+
+        # Generate the outputs
+        outputs = []
+
+        for output_text in output_texts:
+            # Split the string by '+' to identify individual text components
+            components = output_text.split(" + ")
+
+            # Generate the final string for each output
+            final_output = delimiter.join(eval(comp, {}, text_dict) for comp in components)
+
+            outputs.append(final_output)
+
+        return tuple(outputs)
+
+class TextCombinations3:
+    texts = ['text1', 'text2', 'text3', 'text1 + text2', 'text1 + text3', 'text2 + text3', 'text1 + text2 + text3']
+    outputs = ['output1','output2','output3']
+
+    @classmethod
+    def generate_combinations(cls, texts, outputs):
+        operations = []
+        for output1, output2, output3 in product(texts, repeat=len(outputs)):
+            operation = f"{output1} to {outputs[0]}, {output2} to {outputs[1]}, {output3} to {outputs[2]}"
+            operations.append(operation)
+        return operations
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        cls.operations = cls.generate_combinations(cls.texts, cls.outputs)
+        return {'required': {'text1': ('STRING', {'multiline': True, 'default': 'Text 1'}),
+                             'text2': ('STRING', {'multiline': True, 'default': 'Text 2'}),
+                             'text3': ('STRING', {'multiline': True, 'default': 'Text 3'}),
+                             'operation': (cls.operations, {'default':cls.operations[0]}),
+                             'delimiter': ('STRING', {'default': ' '}),
+                             'use_seed': (['true','false'], {'default': 'false'}),
+                             'seed': ('INT', {'default': 0, 'min': 0, 'max': 0xffffffffffffffff})}}
+
+    RETURN_TYPES = ('STRING','STRING','STRING')
+    RETURN_NAMES = ('output1','output2','output3')
+    FUNCTION = 'mix'
+    CATEGORY = 'Mikey/Text'
+
+    def mix(self, text1, text2, text3, operation, delimiter, use_seed, seed):
+        text_dict = {'text1': text1, 'text2': text2, 'text3': text3}
+        if use_seed == 'true' and len(self.operations) > 0:
+            offset = seed % len(self.operations)
+            operation = self.operations[offset]
+
+        # Parsing the operation string
+        ops = operation.split(", ")
+        output_texts = [op.split(" to ")[0] for op in ops]
+
+        # Generate the outputs
+        outputs = []
+
+        for output_text in output_texts:
+            # Split the string by '+' to identify individual text components
+            components = output_text.split(" + ")
+
+            # Generate the final string for each output
+            final_output = delimiter.join(eval(comp, {}, text_dict) for comp in components)
+
+            outputs.append(final_output)
+
+        return tuple(outputs)
+
+class Text2InputOr3rdOption:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {'required': {'text_a': ('STRING', {'multiline': True, 'default': 'Text A'}),
+                             'text_b': ('STRING', {'multiline': True, 'default': 'Text B'}),
+                             'text_c': ('STRING', {'multiline': True, 'default': 'Text C'}),
+                             'use_text_c_for_both': (['true','false'], {'default': 'false'}),}}
+
+    RETURN_TYPES = ('STRING','STRING',)
+    RETURN_NAMES = ('text_a','text_b',)
+    FUNCTION = 'output'
+    CATEGORY = 'Mikey/Text'
+
+    def output(self, text_a, text_b, text_c, use_text_c_for_both):
+        if use_text_c_for_both == 'true':
+            return (text_c, text_c)
+        else:
+            return (text_a, text_b)
 
 NODE_CLASS_MAPPINGS = {
     'Wildcard Processor': WildcardProcessor,
@@ -2599,7 +2645,9 @@ NODE_CLASS_MAPPINGS = {
     'HaldCLUT ': HaldCLUT,
     'Seed String': IntegerAndString,
     'Image Caption': ImageCaption,
-    'TextCombinations': TextCombinations,
+    'TextCombinations': TextCombinations2,
+    'TextCombinations3': TextCombinations3,
+    'Text2InputOr3rdOption': Text2InputOr3rdOption,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -2635,5 +2683,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'HaldCLUT': 'HaldCLUT (Mikey)',
     'Seed String': 'Seed String (Mikey)',
     'Image Caption': 'Image Caption (Mikey)',
-    'TextCombinations': 'TextCombinations (Mikey)',
+    'TextCombinations': 'Text Combinations 2 (Mikey)',
+    'TextCombinations3': 'Text Combinations 3 (Mikey)',
+    'Text2InputOr3rdOption': 'Text 2 Inputs Or 3rd Option Instead (Mikey)',
 }
