@@ -2496,6 +2496,8 @@ class TextCombinations:
     def INPUT_TYPES(s):
         s.operations = ['text1 to output1 and text2 to output2',
                         'text1 to output2 and text2 to output1',
+                        'text1 to output1 and output2',
+                        'text2 to output1 and output2',
                         'text1 + text2 to output1 and text1 + text2 to output2',
                         'text1 + text2 to output1 and text1 to output1',
                         'text1 + text2 to output2 and text1 to output2',
@@ -2526,12 +2528,18 @@ class TextCombinations:
         if operation == 'text1 to output1 and text2 to output2':
             output1 = text1
             output2 = text2
-        elif operation == 'text1 + text2 to output1 and text1 + text2 to output2':
-            output1 = text1 + text2
-            output2 = text1 + text2
         elif operation == 'text1 to output2 and text2 to output1':
             output1 = text2
             output2 = text1
+        elif operation == 'text1 to output1 and output2':
+            output1 = text1
+            output2 = text1
+        elif operation == 'text2 to output1 and output2':
+            output1 = text2
+            output2 = text2
+        elif operation == 'text1 + text2 to output1 and text1 + text2 to output2':
+            output1 = text1 + text2
+            output2 = text1 + text2
         elif operation == 'text1 + text2 to output1 and text1 to output1':
             output1 = text1 + text2
             output2 = text1
