@@ -34,11 +34,9 @@ module = importlib.util.module_from_spec(spec)
 sys.modules[module_name] = module
 spec.loader.exec_module(module)
 from nodes_upscale_model import UpscaleModelLoader, ImageUpscaleWithModel
-from comfy.model_management import soft_empty_cache, free_memory, get_torch_device, current_loaded_models
+from comfy.model_management import soft_empty_cache, current_loaded_models
 from nodes import LoraLoader, ConditioningAverage, common_ksampler, ImageScale, VAEEncode, VAEDecode
 import comfy.utils
-from comfy_extras.chainner_models import model_loading
-from comfy import model_management
 
 def find_latent_size(width: int, height: int, res: int = 1024) -> (int, int):
     best_w = 0
@@ -2702,15 +2700,12 @@ class FreeMemory:
 
     def cleanup(self, image):
         global current_loaded_models
-        #free_memory(12 * 1024 * 1024 * 1024, get_torch_device())
         to_unload = []
         for i in range(len(current_loaded_models)):
             to_unload = [i] + to_unload
         for i in to_unload:
             print("unload model", i)
             m = current_loaded_models.pop(i)
-            #m.model.unpatch_model()
-            #m.model_unload()
             m.model.model.cpu()
             m.model.model = None
             m.model = None
