@@ -5,6 +5,7 @@ from itertools import product
 import json
 from math import ceil, pow, gcd
 import os
+import psutil
 import random
 import re
 import sys
@@ -32,7 +33,7 @@ module = importlib.util.module_from_spec(spec)
 sys.modules[module_name] = module
 spec.loader.exec_module(module)
 from nodes_upscale_model import UpscaleModelLoader, ImageUpscaleWithModel
-from comfy.model_management import soft_empty_cache
+from comfy.model_management import soft_empty_cache, free_memory, get_torch_device
 from nodes import LoraLoader, ConditioningAverage, common_ksampler, ImageScale, VAEEncode, VAEDecode
 import comfy.utils
 from comfy_extras.chainner_models import model_loading
@@ -2688,7 +2689,7 @@ class Text2InputOr3rdOption:
         else:
             return (text_a, text_b)
 
-class SoftEmptyCache:
+class FreeMemory:
     @classmethod
     def INPUT_TYPES(s):
         return {'required': {'image': ('IMAGE',),}}
@@ -2699,7 +2700,7 @@ class SoftEmptyCache:
     CATEGORY = 'Mikey/Utils'
 
     def cleanup(self, image):
-        soft_empty_cache()
+        free_memory(12 * 1024 * 1024 * 1024, get_torch_device())
         return (image,)
 
 NODE_CLASS_MAPPINGS = {
@@ -2739,7 +2740,7 @@ NODE_CLASS_MAPPINGS = {
     'TextCombinations': TextCombinations2,
     'TextCombinations3': TextCombinations3,
     'Text2InputOr3rdOption': Text2InputOr3rdOption,
-    'SoftEmptyCache': SoftEmptyCache,
+    'FreeMemory': FreeMemory,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -2779,5 +2780,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'TextCombinations': 'Text Combinations 2 (Mikey)',
     'TextCombinations3': 'Text Combinations 3 (Mikey)',
     'Text2InputOr3rdOption': 'Text 2 Inputs Or 3rd Option Instead (Mikey)',
-    'SoftEmptyCache': 'Soft Empty Cache (Mikey)'
+    'FreeMemory': 'Free CPU Memory (Mikey)'
 }
