@@ -34,9 +34,11 @@ module = importlib.util.module_from_spec(spec)
 sys.modules[module_name] = module
 spec.loader.exec_module(module)
 from nodes_upscale_model import UpscaleModelLoader, ImageUpscaleWithModel
-from comfy.model_management import soft_empty_cache, current_loaded_models
+from comfy.model_management import soft_empty_cache, free_memory, get_torch_device, current_loaded_models, load_model_gpu
 from nodes import LoraLoader, ConditioningAverage, common_ksampler, ImageScale, VAEEncode, VAEDecode
 import comfy.utils
+from comfy_extras.chainner_models import model_loading
+from comfy import model_management, model_base
 
 def find_latent_size(width: int, height: int, res: int = 1024) -> (int, int):
     best_w = 0
@@ -2688,36 +2690,6 @@ class Text2InputOr3rdOption:
         else:
             return (text_a, text_b)
 
-class FreeMemory:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {'required': {'image': ('IMAGE',),}}
-
-    RETURN_TYPES = ('IMAGE',)
-    RETURN_NAMES = ('image',)
-    FUNCTION = 'cleanup'
-    CATEGORY = 'Mikey/Utils'
-
-    def cleanup(self, image):
-        global current_loaded_models
-        to_unload = []
-        for i in range(len(current_loaded_models)):
-            to_unload = [i] + to_unload
-        for i in to_unload:
-            print("unload model", i)
-            m = current_loaded_models.pop(i)
-            m.model.model.cpu()
-            m.model.model = None
-            m.model = None
-            m = None
-            del m
-            gc.collect()
-            torch.cuda.empty_cache()
-        current_loaded_models = []
-        soft_empty_cache()
-        gc.collect()
-        return (image,)
-
 NODE_CLASS_MAPPINGS = {
     'Wildcard Processor': WildcardProcessor,
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
@@ -2755,7 +2727,6 @@ NODE_CLASS_MAPPINGS = {
     'TextCombinations': TextCombinations2,
     'TextCombinations3': TextCombinations3,
     'Text2InputOr3rdOption': Text2InputOr3rdOption,
-    'FreeMemory': FreeMemory,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -2795,5 +2766,4 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'TextCombinations': 'Text Combinations 2 (Mikey)',
     'TextCombinations3': 'Text Combinations 3 (Mikey)',
     'Text2InputOr3rdOption': 'Text 2 Inputs Or 3rd Option Instead (Mikey)',
-    'FreeMemory': 'Free CPU Memory (Mikey)'
 }
