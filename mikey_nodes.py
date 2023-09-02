@@ -1689,7 +1689,8 @@ class LoraSyntaxProcessor:
         return {"required": {
                     "model": ("MODEL",),
                     "clip": ("CLIP",),
-                    "text": ("STRING", {"multiline": True, "default": "<lora:filename:weight>"})
+                    "text": ("STRING", {"multiline": True, "default": "<lora:filename:weight>"}),
+                    "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff})
                     }
                 }
 
@@ -2029,6 +2030,12 @@ def split_image(img):
     # Calculate the overlap
     overlap_x = (num_tiles_x * tile_width - width) / (num_tiles_x - 1)
     overlap_y = (num_tiles_y * tile_height - height) / (num_tiles_y - 1)
+    if overlap_x < 256:
+        num_tiles_x += 1
+        overlap_x = (num_tiles_x * tile_width - width) / (num_tiles_x - 1)
+    if overlap_y < 256:
+        num_tiles_y += 1
+        overlap_y = (num_tiles_y * tile_height - height) / (num_tiles_y - 1)
 
     tiles = []
 
