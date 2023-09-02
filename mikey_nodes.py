@@ -1907,11 +1907,15 @@ class MikeySampler:
         sample2 = common_ksampler(refiner_model, seed, 30, 3.5, 'dpmpp_2m', 'simple', positive_cond_refiner, negative_cond_refiner, sample1,
                                   disable_noise=True, start_step=21, force_full_denoise=True)[0]
         # step 3 upscale
+        if upscale_by == 0:
+            return sample2
         pixels = vaedecoder.decode(vae, sample2)[0]
         org_width, org_height = pixels.shape[2], pixels.shape[1]
         img = iuwm.upscale(upscale_model, image=pixels)[0]
         upscaled_width, upscaled_height = int(org_width * upscale_by // 8 * 8), int(org_height * upscale_by // 8 * 8)
         img = image_scaler.upscale(img, 'nearest-exact', upscaled_width, upscaled_height, 'center')[0]
+        if hires_strength == 0:
+            return (vaeencoder.encode(vae, img)[0],)
         # Adjust start_step based on complexity
         image_complexity = calculate_image_complexity(img)
         print('Image Complexity:', image_complexity)
@@ -1963,12 +1967,16 @@ class MikeySamplerBaseOnly:
         # step 2 run base model high cfg
         sample2 = common_ksampler(base_model, seed+1, 31 + smooth_step, 9.5, 'dpmpp_3m_sde_gpu', 'exponential', positive_cond_base, negative_cond_base, sample1,
                                   disable_noise=True, start_step=15, force_full_denoise=True)[0]
+        if upscale_by == 0:
+            return sample2
         # step 3 upscale
         pixels = vaedecoder.decode(vae, sample2)[0]
         org_width, org_height = pixels.shape[2], pixels.shape[1]
         img = iuwm.upscale(upscale_model, image=pixels)[0]
         upscaled_width, upscaled_height = int(org_width * upscale_by // 8 * 8), int(org_height * upscale_by // 8 * 8)
         img = image_scaler.upscale(img, 'nearest-exact', upscaled_width, upscaled_height, 'center')[0]
+        if hires_strength == 0:
+            return (vaeencoder.encode(vae, img)[0],)
         # Adjust start_step based on complexity
         image_complexity = calculate_image_complexity(img)
         print('Image Complexity:', image_complexity)
@@ -1979,7 +1987,6 @@ class MikeySamplerBaseOnly:
         out = common_ksampler(base_model, seed, 31, 9.5, 'dpmpp_3m_sde_gpu', 'exponential', positive_cond_base, negative_cond_base, latent,
                                 start_step=start_step, force_full_denoise=True)
         return out
-
 
 def match_histograms(source, reference):
     """
@@ -2497,6 +2504,68 @@ class ImageCaption:
 
         return (pil2tensor(combined_image),)
 
+def tensor2pil_alpha(tensor):
+    # convert a PyTorch tensor to a PIL Image object
+    # assumes tensor is a 4D tensor with shape (batch_size, channels, height, width)
+    # returns a PIL Image object with mode 'RGBA'
+    tensor = tensor.squeeze(0)  # remove batch dimension
+    tensor = tensor.permute(1, 2, 0)
+    if tensor.shape[2] == 1:
+        tensor = torch.cat([tensor, tensor, tensor], dim=2)
+    elif tensor.shape[2] == 3:
+        tensor = torch.cat([tensor, torch.ones_like(tensor[:, :, :1])], dim=2)
+    tensor = tensor.mul(255).clamp(0, 255).byte()
+    pil_image = Image.fromarray(tensor.numpy(), mode='RGBA')
+    return pil_image
+
+def checkerboard_border(image, border_width, border_color):
+    # create a checkerboard pattern with fixed size
+    pattern_size = (image.shape[2] + border_width * 2, image.shape[1] + border_width * 2)
+    checkerboard = Image.new('RGB', pattern_size, border_color)
+    for i in range(0, pattern_size[0], border_width):
+        for j in range(0, pattern_size[1], border_width):
+            box = (i, j, i + border_width, j + border_width)
+            if (i // border_width + j // border_width) % 2 == 0:
+                checkerboard.paste(Image.new('RGB', (border_width, border_width), 'white'), box)
+            else:
+                checkerboard.paste(Image.new('RGB', (border_width, border_width), 'black'), box)
+
+    # resize the input image to fit inside the checkerboard pattern
+    orig_image = tensor2pil(image)
+
+    # paste the input image onto the checkerboard pattern
+    checkerboard.paste(orig_image, (border_width, border_width))
+
+    return pil2tensor(checkerboard)[None, :, :, :]
+
+class ImageBorder:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {'required': {'image': ('IMAGE',),
+                    'border_width': ('INT', {'default': 10, 'min': 0, 'max': 1000}),
+                    'border_color': ('STRING', {'default': 'black'})}}
+
+    RETURN_TYPES = ('IMAGE',)
+    RETURN_NAMES = ('image',)
+    FUNCTION = 'border'
+    CATEGORY = 'Mikey/Image'
+
+    def border(self, image, border_width, border_color):
+        # Convert tensor to PIL image
+        orig_image = tensor2pil(image)
+        width, height = orig_image.size
+        # Create the border
+        if border_color == 'checkerboard':
+            return checkerboard_border(image, border_width, 'black')
+        # check for string containing a tuple
+        if border_color.startswith('(') and border_color.endswith(')'):
+            border_color = border_color[1:-1]
+            border_color = tuple(map(int, border_color.split(',')))
+        border_image = Image.new('RGB', (width + border_width * 2, height + border_width * 2), border_color)
+        border_image.paste(orig_image, (border_width, border_width))
+
+        return (pil2tensor(border_image),)
+
 class TextCombinations2:
     texts = ['text1', 'text2', 'text1 + text2']
     outputs = ['output1','output2']
@@ -2619,6 +2688,20 @@ class Text2InputOr3rdOption:
         else:
             return (text_a, text_b)
 
+class SoftEmptyCache:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {'required': {'image': ('IMAGE',),}}
+
+    RETURN_TYPES = ('IMAGE',)
+    RETURN_NAMES = ('image',)
+    FUNCTION = 'cleanup'
+    CATEGORY = 'Mikey/Utils'
+
+    def cleanup(self, image):
+        soft_empty_cache()
+        return (image,)
+
 NODE_CLASS_MAPPINGS = {
     'Wildcard Processor': WildcardProcessor,
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
@@ -2652,9 +2735,11 @@ NODE_CLASS_MAPPINGS = {
     'HaldCLUT ': HaldCLUT,
     'Seed String': IntegerAndString,
     'Image Caption': ImageCaption,
+    'ImageBorder': ImageBorder,
     'TextCombinations': TextCombinations2,
     'TextCombinations3': TextCombinations3,
     'Text2InputOr3rdOption': Text2InputOr3rdOption,
+    'SoftEmptyCache': SoftEmptyCache,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -2690,7 +2775,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'HaldCLUT': 'HaldCLUT (Mikey)',
     'Seed String': 'Seed String (Mikey)',
     'Image Caption': 'Image Caption (Mikey)',
+    'ImageBorder': 'Image Border (Mikey)',
     'TextCombinations': 'Text Combinations 2 (Mikey)',
     'TextCombinations3': 'Text Combinations 3 (Mikey)',
     'Text2InputOr3rdOption': 'Text 2 Inputs Or 3rd Option Instead (Mikey)',
+    'SoftEmptyCache': 'Soft Empty Cache (Mikey)'
 }
