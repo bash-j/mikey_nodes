@@ -1990,6 +1990,82 @@ class MikeySamplerBaseOnly:
                                 start_step=start_step, force_full_denoise=True)
         return out
 
+class MikeySamplerBaseOnlyAdvanced:
+    @classmethod
+    def INPUT_TYPES(s):
+        s.upscale_models = folder_paths.get_filename_list("upscale_models")
+        default_model = '4x-UltraSharp.pth' if '4x-UltraSharp.pth' in s.upscale_models else s.upscale_models[0]
+        return {"required": {"base_model": ("MODEL",),
+                             "positive_cond_base": ("CONDITIONING",),
+                             "negative_cond_base": ("CONDITIONING",),
+                             "samples": ("LATENT",),
+                             "vae": ("VAE",),
+                             "add_noise": (["enable","disable"], {"default": "enable"}),
+                             "denoise": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                             "steps": ("INT", {"default": 31, "min": 1, "max": 1000}),
+                             'smooth_step': ("INT", {"default": 0, "min": -1, "max": 100}),
+                             "cfg_1": ("FLOAT", {"default": 5.0, "min": 0.1, "max": 100.0, "step": 0.1}),
+                             "cfg_2": ("FLOAT", {"default": 9.5, "min": 0.1, "max": 100.0, "step": 0.1}),
+                             "sampler_name": (comfy.samplers.KSampler.SAMPLERS, {'default': 'dpmpp_3m_sde_gpu'}),
+                             "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {'default': 'exponential'}),
+                             "upscale_model": (s.upscale_models, {'default': default_model}),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                             "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1}),
+                             "hires_denoise": ("FLOAT", {"default": 0.4, "min": 0.0, "max": 1.0, "step": 0.01}),
+                             "hires_steps": ("INT", {"default": 31, "min": 1, "max": 1000}),
+                             }}
+
+    RETURN_TYPES = ('LATENT',)
+    FUNCTION = 'run'
+    CATEGORY = 'Mikey/Sampling'
+
+    def run(self, seed, base_model, positive_cond_base, negative_cond_base,
+            samples, vae, add_noise, denoise, steps, cfg_1, cfg_2, sampler_name,
+            scheduler, upscale_model, upscale_by, hires_denoise, hires_steps, smooth_step):
+        image_scaler = ImageScale()
+        vaeencoder = VAEEncode()
+        vaedecoder = VAEDecode()
+        uml = UpscaleModelLoader()
+        upscale_model = uml.load_model(upscale_model)[0]
+        iuwm = ImageUpscaleWithModel()
+        # step 1 run base model low cfg
+        start_step = int(steps - (steps * denoise))
+        if start_step > steps // 2:
+            last_step = steps - 1
+        else:
+            if start_step % 2 == 0:
+                last_step = steps // 2 - 1
+            else:
+                last_step = steps // 2
+        print(f'base model start_step: {start_step}, last_step: {last_step}')
+        sample1 = common_ksampler(base_model, seed, steps, cfg_1, sampler_name, scheduler,
+                                  positive_cond_base, negative_cond_base, samples,
+                                  start_step=start_step, last_step=last_step, force_full_denoise=False)[0]
+        # step 2 run base model high cfg
+        start_step = last_step + 1
+        total_steps = steps + smooth_step
+        sample2 = common_ksampler(base_model, seed+1, total_steps, cfg_2, sampler_name, scheduler,
+                                  positive_cond_base, negative_cond_base, sample1,
+                                  disable_noise=True, start_step=start_step, force_full_denoise=True)[0]
+        if upscale_by == 0:
+            return sample2
+        # step 3 upscale
+        pixels = vaedecoder.decode(vae, sample2)[0]
+        org_width, org_height = pixels.shape[2], pixels.shape[1]
+        img = iuwm.upscale(upscale_model, image=pixels)[0]
+        upscaled_width, upscaled_height = int(org_width * upscale_by // 8 * 8), int(org_height * upscale_by // 8 * 8)
+        img = image_scaler.upscale(img, 'nearest-exact', upscaled_width, upscaled_height, 'center')[0]
+        if hires_denoise == 0:
+            return (vaeencoder.encode(vae, img)[0],)
+        # encode image
+        latent = vaeencoder.encode(vae, img)[0]
+        # step 3 run base model
+        start_step = int(hires_steps - (hires_steps * hires_denoise))
+        out = common_ksampler(base_model, seed, hires_steps, cfg_2, sampler_name, scheduler,
+                              positive_cond_base, negative_cond_base, latent,
+                              start_step=start_step, force_full_denoise=True)
+        return out
+
 def match_histograms(source, reference):
     """
     Adjust the pixel values of a grayscale image such that its histogram
@@ -2716,6 +2792,7 @@ NODE_CLASS_MAPPINGS = {
     'Mikey Sampler': MikeySampler,
     'MikeySamplerTiledAdvanced': MikeySamplerTiledAdvanced,
     'Mikey Sampler Base Only': MikeySamplerBaseOnly,
+    'Mikey Sampler Base Only Advanced': MikeySamplerBaseOnlyAdvanced,
     'Mikey Sampler Tiled': MikeySamplerTiled,
     'Mikey Sampler Tiled Base Only': MikeySamplerTiledBaseOnly,
     'AddMetaData': AddMetaData,
@@ -2754,6 +2831,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Style Conditioner': 'Style Conditioner (Mikey)',
     'Mikey Sampler': 'Mikey Sampler',
     'Mikey Sampler Base Only': 'Mikey Sampler Base Only',
+    'Mikey Sampler Base Only Advanced': 'Mikey Sampler Base Only Advanced',
     'Mikey Sampler Tiled': 'Mikey Sampler Tiled',
     'MikeySamplerTiledAdvanced': 'Mikey Sampler Tiled Advanced',
     'Mikey Sampler Tiled Base Only': 'Mikey Sampler Tiled Base Only',
