@@ -247,6 +247,86 @@ def find_and_replace_wildcards(prompt, offset_seed, debug=False):
     new_prompt += prompt[last_end:]
     return new_prompt
 
+def search_and_replace(text, extra_pnginfo, prompt):
+    # if %date: in text, then replace with date
+    print(text)
+    if '%date:' in text:
+        for match in re.finditer(r'%date:(.*?)%', text):
+            date_match = match.group(1)
+            cursor = 0
+            date_pattern = ''
+            now = datetime.datetime.now()
+
+            pattern_map = {
+                'yyyy': now.strftime('%Y'),
+                'yy': now.strftime('%y'),
+                'MM': now.strftime('%m'),
+                'M': now.strftime('%m').lstrip('0'),
+                'dd': now.strftime('%d'),
+                'd': now.strftime('%d').lstrip('0'),
+                'hh': now.strftime('%H'),
+                'h': now.strftime('%H').lstrip('0'),
+                'mm': now.strftime('%M'),
+                'm': now.strftime('%M').lstrip('0'),
+                'ss': now.strftime('%S'),
+                's': now.strftime('%S').lstrip('0')
+            }
+
+            sorted_keys = sorted(pattern_map.keys(), key=len, reverse=True)
+
+            while cursor < len(date_match):
+                replaced = False
+                for key in sorted_keys:
+                    if date_match.startswith(key, cursor):
+                        date_pattern += pattern_map[key]
+                        cursor += len(key)
+                        replaced = True
+                        break
+                if not replaced:
+                    date_pattern += date_match[cursor]
+                    cursor += 1
+
+            text = text.replace('%date:' + match.group(1) + '%', date_pattern)
+    # Parse JSON if they are strings
+    if isinstance(extra_pnginfo, str):
+        extra_pnginfo = json.loads(extra_pnginfo)
+    if isinstance(prompt, str):
+        prompt = json.loads(prompt)
+
+    # Map from "Node name for S&R" to id in the workflow
+    node_to_id_map = {}
+    for node in extra_pnginfo['workflow']['nodes']:
+        node_name = node['properties'].get('Node name for S&R')
+        node_id = node['id']
+        node_to_id_map[node_name] = node_id
+
+    # Find all patterns in the text that need to be replaced
+    patterns = re.findall(r"%([^%]+)%", text)
+    for pattern in patterns:
+        # Split the pattern to get the node name and widget name
+        node_name, widget_name = pattern.split('.')
+
+        # Find the id for this node name
+        node_id = node_to_id_map.get(node_name)
+        if node_id is None:
+            print(f"No node with name {node_name} found.")
+            continue
+
+        # Find the value of the specified widget in prompt JSON
+        prompt_node = prompt.get(str(node_id))
+        if prompt_node is None:
+            print(f"No prompt data for node with id {node_id}.")
+            continue
+
+        widget_value = prompt_node['inputs'].get(widget_name)
+        if widget_value is None:
+            print(f"No widget with name {widget_name} found for node {node_name}.")
+            continue
+
+        # Replace the pattern in the text
+        text = text.replace(f"%{pattern}%", str(widget_value))
+
+    return text
 
 def strip_all_syntax(text):
     # replace any <lora:lora_name> with nothing
@@ -389,13 +469,15 @@ class WildcardProcessor:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {"prompt": ("STRING", {"multiline": True, "placeholder": "Prompt Text"}),
-                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff})}}
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff})},
+                "hidden": {"prompt_": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},}
 
     RETURN_TYPES = ('STRING',)
     FUNCTION = 'process'
     CATEGORY = 'Mikey/Text'
 
-    def process(self, prompt, seed):
+    def process(self, prompt, seed, prompt_, extra_pnginfo):
+        prompt = search_and_replace(prompt, extra_pnginfo, prompt)
         prompt = find_and_replace_wildcards(prompt, seed)
         return (prompt, )
 
@@ -793,7 +875,8 @@ class BatchCropResizeInplace:
                              "replace_suffix": ("STRING", {"default": "_cropped_resized"}),
                              "upscale_method": (s.upscale_methods,),
                              "crop": (s.crop_methods,),
-                             "crop_amount": ("FLOAT", {"default": 0.05})}}
+                             "crop_amount": ("FLOAT", {"default": 0.05})},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},}
 
     RETURN_TYPES = ('STRING',)
     RETURN_NAMES = ('job_done',)
@@ -837,7 +920,8 @@ class BatchCropResizeInplace:
                      if os.path.isfile(os.path.join(image_directory, f)) and f.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"))]
         return files
 
-    def batch(self, image_directory, subdirectories, replace_original, replace_suffix, upscale_method, crop, crop_amount):
+    def batch(self, image_directory, subdirectories, replace_original, replace_suffix, upscale_method, crop, crop_amount,
+              prompt, extra_pnginfo):
         if not os.path.exists(image_directory):
             raise Exception(f"Image directory {image_directory} does not exist")
 
@@ -854,10 +938,35 @@ class BatchCropResizeInplace:
             if replace_original == 'true':
                 img.save(file)
             else:
+                replace_suffix = search_and_replace(replace_suffix, extra_pnginfo, prompt)
                 filename, file_extension = os.path.splitext(file)
                 img.save(filename + replace_suffix + file_extension)
         return (f'Job done, {len(files)} images processed',)
 
+class BatchLoadImages:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"image_directory": ("STRING", {"multiline": False, "placeholder": "Image Directory"}),
+                             "subdirectories": (['true', 'false'], {"default": 'false'})}}
+
+    RETURN_TYPES = ('IMAGE',)
+    RETURN_NAMES = ('image',)
+    FUNCTION = 'batch'
+    CATEGORY = 'Mikey/Image'
+    OUTPUT_IS_LIST = (True, )
+
+    def batch(self, image_directory, subdirectories):
+        if not os.path.exists(image_directory):
+            raise Exception(f"Image directory {image_directory} does not exist")
+
+        images = []
+        for file in os.listdir(image_directory):
+            if file.endswith('.png') or file.endswith('.jpg') or file.endswith('.jpeg') or file.endswith('.webp') or file.endswith('.bmp') or file.endswith('.gif'):
+                img = Image.open(os.path.join(image_directory, file))
+                img = pil2tensor(img)
+                images.append(img)
+        print(f'Loaded {len(images)} images')
+        return (images,)
 
 def get_save_image_path(filename_prefix, output_dir, image_width=0, image_height=0):
     def map_filename(filename):
@@ -909,8 +1018,8 @@ class SaveImagesMikey:
         return {"required":
                     {"images": ("IMAGE", ),
                      "positive_prompt": ("STRING", {'default': 'Positive Prompt'}),
-                     "negative_prompt": ("STRING", {'default': 'Negative Prompt'}),},
-                     "filename_prefix": ("STRING", {"default": ""}),
+                     "negative_prompt": ("STRING", {'default': 'Negative Prompt'}),
+                     "filename_prefix": ("STRING", {"default": ""}),},
                 "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
                 }
 
@@ -920,6 +1029,7 @@ class SaveImagesMikey:
     CATEGORY = "Mikey/Image"
 
     def save_images(self, images, filename_prefix='', prompt=None, extra_pnginfo=None, positive_prompt='', negative_prompt=''):
+        filename_prefix = search_and_replace(filename_prefix, extra_pnginfo, prompt)
         full_output_folder, filename, counter, subfolder, filename_prefix = get_save_image_path(filename_prefix, self.output_dir, images[0].shape[1], images[0].shape[0])
         results = list()
         for image in images:
@@ -939,8 +1049,12 @@ class SaveImagesMikey:
                 pos_trunc = clean_pos.replace(' ', '_')[0:80]
             if negative_prompt:
                 metadata.add_text("negative_prompt", json.dumps(negative_prompt, ensure_ascii=False))
-            ts_str = datetime.datetime.now().strftime("%y%m%d%H%M%S")
-            file = f"{ts_str}_{pos_trunc}_{filename}_{counter:05}_.png"
+            if filename_prefix != '':
+                metadata.add_text("filename_prefix", json.dumps(filename_prefix, ensure_ascii=False))
+                file = f"{filename}_{counter:05}_.png"
+            else:
+                ts_str = datetime.datetime.now().strftime("%y%m%d%H%M%S")
+                file = f"{ts_str}_{pos_trunc}_{filename}_{counter:05}_.png"
             img.save(os.path.join(full_output_folder, file), pnginfo=metadata, compress_level=4)
             results.append({
                 "filename": file,
@@ -982,15 +1096,18 @@ class SaveImagesMikeyML:
     OUTPUT_NODE = True
     CATEGORY = "Mikey/Image"
 
-    def _prepare_filename_texts(self, filename_text_1, filename_text_2, filename_text_3):
+    def _prepare_filename_texts(self, filename_text_1, filename_text_2, filename_text_3, extra_pnginfo, prompt):
         # replace default values with empty strings
         filename_texts = [filename_text_1, filename_text_2, filename_text_3]
         default_texts = ['Filename Text 1', 'Filename Text 2', 'Filename Text 3']
         for i, text in enumerate(filename_texts):
             if text == default_texts[i]:
                 filename_texts[i] = ''
+            # use search and replace
+            filename_texts[i] = search_and_replace(text, extra_pnginfo, prompt)
             # replace any special characters with nothing
             filename_texts[i] = re.sub(r'[^a-zA-Z0-9 ]', '', filename_texts[i])
+
         # need to make sure the total filelength name is under 256 characters including the .png, separator, and counter
         # if the total length is over 256 characters, truncate the longest text to fit under 250 characters total length
         total_length = len(filename_texts[0]) + len(filename_texts[1]) + len(filename_texts[2]) + 5 + 5 + 12
@@ -1042,11 +1159,13 @@ class SaveImagesMikeyML:
         positions = [filename_text_1_pos, filename_text_2_pos, filename_text_3_pos, timestamp_pos, counter_pos]
         if len(positions) != len(set(positions)):
             raise ValueError("Duplicate position numbers detected. Please ensure all position numbers are unique.")
-
+        sub_directory = search_and_replace(sub_directory, extra_pnginfo, prompt)
+        # strip special characters from sub_directory
+        sub_directory = re.sub(r'[^a-zA-Z0-9 _/\\]', '', sub_directory)
         full_output_folder = os.path.join(self.output_dir, sub_directory)
         os.makedirs(full_output_folder, exist_ok=True)
 
-        filename_texts = self._prepare_filename_texts(filename_text_1, filename_text_2, filename_text_3)
+        filename_texts = self._prepare_filename_texts(filename_text_1, filename_text_2, filename_text_3, extra_pnginfo, prompt)
 
         if timestamp == 'true':
             ts = datetime.datetime.now().strftime("%y%m%d%H%M%S")
@@ -1128,7 +1247,7 @@ class AddMetaData:
         return {"required": {"image": ("IMAGE",),
                              "label": ("STRING", {"multiline": False, "placeholder": "Label for metadata"}),
                              "text_value": ("STRING", {"multiline": True, "placeholder": "Text to add to metadata"})},
-                "hidden": {"extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
         }
 
     RETURN_TYPES = ('IMAGE',)
@@ -1137,6 +1256,8 @@ class AddMetaData:
     OUTPUT_NODE = True
 
     def add_metadata(self, image, label, text_value, prompt=None, extra_pnginfo=None):
+        label = search_and_replace(label, extra_pnginfo, prompt)
+        text_value = search_and_replace(text_value, extra_pnginfo, prompt)
         if extra_pnginfo is None:
             extra_pnginfo = {}
         if label in extra_pnginfo:
@@ -1144,6 +1265,20 @@ class AddMetaData:
         else:
             extra_pnginfo[label] = text_value
         return (image,)
+
+class SearchAndReplace:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"text": ("STRING", {"multiline": False, "placeholder": "Text to search and replace"}),},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},}
+
+    RETURN_TYPES = ('STRING',)
+    FUNCTION = "search_and_replace"
+    CATEGORY = "Mikey/Utils"
+
+    def search_and_replace(self, text, prompt=None, extra_pnginfo=None):
+        result = search_and_replace(text, extra_pnginfo, prompt)
+        return (result,)
 
 class SaveMetaData:
     @classmethod
@@ -1161,6 +1296,7 @@ class SaveMetaData:
 
     def save_metadata(self, image, filename_prefix, timestamp_prefix, counter, prompt=None, extra_pnginfo=None):
         # save metatdata to txt file
+        filename_prefix = search_and_replace(filename_prefix, extra_pnginfo, prompt)
         full_output_folder, filename, counter, subfolder, filename_prefix = folder_paths.get_save_image_path(filename_prefix, folder_paths.get_output_directory(), 1, 1)
         ts_str = datetime.datetime.now().strftime("%y%m%d%H%M")
         filen = ''
@@ -1183,14 +1319,16 @@ class FileNamePrefix:
     def INPUT_TYPES(s):
         return {"required": {'date': (['true','false'], {'default':'true'}),
                              'date_directory': (['true','false'], {'default':'true'}),
-                             'custom_text': ('STRING', {'default': ''})}}
+                             'custom_text': ('STRING', {'default': ''})},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},}
 
     RETURN_TYPES = ('STRING',)
     RETURN_NAMES = ('filename_prefix',)
     FUNCTION = 'get_filename_prefix'
     CATEGORY = 'Mikey/Meta'
 
-    def get_filename_prefix(self, date, date_directory, custom_directory, custom_text):
+    def get_filename_prefix(self, date, date_directory, custom_directory, custom_text,
+                            prompt=None, extra_pnginfo=None):
         filename_prefix = ''
         if date_directory == 'true':
             ts_str = datetime.datetime.now().strftime("%y%m%d")
@@ -1199,6 +1337,7 @@ class FileNamePrefix:
             ts_str = datetime.datetime.now().strftime("%y%m%d%H%M")
             filename_prefix += ts_str
         if custom_text != '':
+            custom_text = search_and_replace(custom_text, extra_pnginfo, prompt)
             filename_prefix += '_' + custom_text
         return (filename_prefix,)
 
@@ -1213,7 +1352,8 @@ class PromptWithStyle:
                              "ratio_selected": (s.ratio_sizes,),
                              "batch_size": ("INT", {"default": 1, "min": 1, "max": 64}),
                              "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                             }
+                             },
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
         }
 
     RETURN_TYPES = ('LATENT','STRING','STRING','STRING','STRING','INT','INT','INT','INT',)
@@ -1223,7 +1363,11 @@ class PromptWithStyle:
     CATEGORY = 'Mikey'
     OUTPUT_NODE = True
 
-    def start(self, positive_prompt, negative_prompt, style, ratio_selected, batch_size, seed):
+    def start(self, positive_prompt, negative_prompt, style, ratio_selected, batch_size, seed,
+              prompt=None, extra_pnginfo=None):
+        # use search and replace
+        positive_prompt = search_and_replace(positive_prompt, extra_pnginfo, prompt)
+        negative_prompt = search_and_replace(negative_prompt, extra_pnginfo, prompt)
         # process random syntax
         positive_prompt = process_random_syntax(positive_prompt, seed)
         negative_prompt = process_random_syntax(negative_prompt, seed)
@@ -1336,7 +1480,8 @@ class PromptWithSDXL:
                              "ratio_selected": (s.ratio_sizes,),
                              "batch_size": ("INT", {"default": 1, "min": 1, "max": 64}),
                              "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff})
-                             }
+                             },
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
         }
 
     RETURN_TYPES = ('LATENT','STRING','STRING','STRING','STRING','INT','INT','INT','INT',)
@@ -1346,7 +1491,11 @@ class PromptWithSDXL:
     CATEGORY = 'Mikey'
     OUTPUT_NODE = True
 
-    def start(self, positive_prompt, negative_prompt, positive_style, negative_style, ratio_selected, batch_size, seed):
+    def start(self, positive_prompt, negative_prompt, positive_style, negative_style, ratio_selected, batch_size, seed,
+              prompt=None, extra_pnginfo=None):
+        # search and replace
+        positive_prompt = search_and_replace(positive_prompt, extra_pnginfo, prompt)
+        negative_prompt = search_and_replace(negative_prompt, extra_pnginfo, prompt)
         # process random syntax
         positive_prompt = process_random_syntax(positive_prompt, seed)
         negative_prompt = process_random_syntax(negative_prompt, seed)
@@ -1397,7 +1546,7 @@ class PromptWithStyleV3:
                                               "2048","2048-90","4096", "4096-90"], {"default": "4x"}),
                              "base_model": ("MODEL",), "clip_base": ("CLIP",), "clip_refiner": ("CLIP",),
                              },
-                "hidden": {"extra_pnginfo": "EXTRA_PNGINFO"},
+                "hidden": {"extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"},
         }
 
     RETURN_TYPES = ('MODEL','LATENT',
@@ -1459,7 +1608,7 @@ class PromptWithStyleV3:
 
     def start(self, base_model, clip_base, clip_refiner, positive_prompt, negative_prompt, ratio_selected, batch_size, seed,
               custom_size='false', fit_custom_size='false', custom_width=1024, custom_height=1024, target_mode='match',
-              extra_pnginfo=None):
+              extra_pnginfo=None, prompt=None):
         if extra_pnginfo is None:
             extra_pnginfo = {'PromptWithStyle': {}}
 
@@ -1531,6 +1680,10 @@ class PromptWithStyleV3:
               'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
         add_metadata_to_dict(prompt_with_style, width=width, height=height, target_width=target_width, target_height=target_height,
                              refiner_width=refiner_width, refiner_height=refiner_height, crop_w=0, crop_h=0)
+        # search and replace
+        positive_prompt = search_and_replace(positive_prompt, extra_pnginfo, prompt)
+        negative_prompt = search_and_replace(negative_prompt, extra_pnginfo, prompt)
+
         # process random syntax
         positive_prompt = process_random_syntax(positive_prompt, seed)
         negative_prompt = process_random_syntax(negative_prompt, seed)
@@ -1693,7 +1846,8 @@ class LoraSyntaxProcessor:
                     "clip": ("CLIP",),
                     "text": ("STRING", {"multiline": True, "default": "<lora:filename:weight>"}),
                     "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff})
-                    }
+                    },
+                "hidden": {"extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"},
                 }
 
     RETURN_TYPES = ('MODEL','CLIP','STRING','STRING')
@@ -1701,7 +1855,9 @@ class LoraSyntaxProcessor:
     FUNCTION = 'process'
     CATEGORY = 'Mikey/Lora'
 
-    def process(self, model, clip, text, seed):
+    def process(self, model, clip, text, seed, extra_pnginfo=None, prompt=None):
+        # search and replace
+        text = search_and_replace(text, extra_pnginfo, prompt)
         # process random syntax
         text = process_random_syntax(text, seed)
         lora_re = r'<lora:(.*?)(?::(.*?))?>'
@@ -1736,7 +1892,8 @@ class WildcardAndLoraSyntaxProcessor:
                     "clip": ("CLIP",),
                     "text": ("STRING", {"multiline": True, "default": "<lora:filename:weight>"}),
                     "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                    }
+                    },
+                "hidden": {"extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"},
                 }
 
     RETURN_TYPES = ('MODEL','CLIP','STRING','STRING')
@@ -1744,7 +1901,9 @@ class WildcardAndLoraSyntaxProcessor:
     FUNCTION = 'process'
     CATEGORY = 'Mikey/Lora'
 
-    def extract_and_load_loras(self, text, model, clip):
+    def extract_and_load_loras(self, text, model, clip, seed, extra_pnginfo=None, prompt=None):
+        # search and replace
+        text = search_and_replace(text, extra_pnginfo, prompt)
         # load loras detected in the prompt text
         # The text for adding LoRA to the prompt, <lora:filename:multiplier>, is only used to enable LoRA, and is erased from prompt afterwards
         # The multiplier is optional, and defaults to 1.0
@@ -1799,6 +1958,8 @@ class StyleConditioner:
                              "positive_cond_base": ("CONDITIONING",), "negative_cond_base": ("CONDITIONING",),
                              "positive_cond_refiner": ("CONDITIONING",), "negative_cond_refiner": ("CONDITIONING",),
                              "base_clip": ("CLIP",), "refiner_clip": ("CLIP",),
+                             "use_seed": (['true','false'], {'default': 'false'}),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
                              }
         }
 
@@ -1807,7 +1968,12 @@ class StyleConditioner:
     FUNCTION = 'add_style'
     CATEGORY = 'Mikey/Conditioning'
 
-    def add_style(self, style, strength, positive_cond_base, negative_cond_base, positive_cond_refiner, negative_cond_refiner, base_clip, refiner_clip):
+    def add_style(self, style, strength, positive_cond_base, negative_cond_base,
+                  positive_cond_refiner, negative_cond_refiner, base_clip, refiner_clip,
+                  use_seed, seed):
+        if use_seed == 'true' and len(self.operations) > 0:
+            offset = seed % len(self.styles)
+            style = self.styles[offset]
         pos_prompt = self.pos_style[style]
         neg_prompt = self.neg_style[style]
         pos_prompt = pos_prompt.replace('{prompt}', '')
@@ -1826,6 +1992,43 @@ class StyleConditioner:
         negative_cond_refiner = ConditioningAverage.addWeighted(self, negative_cond_refiner_new, negative_cond_refiner, strength)[0]
 
         return (positive_cond_base, negative_cond_base, positive_cond_refiner, negative_cond_refiner,)
+
+class StyleConditionerBaseOnly:
+    @classmethod
+    def INPUT_TYPES(s):
+        s.styles, s.pos_style, s.neg_style = read_styles()
+        return {"required": {"style": (s.styles,),"strength": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.1}),
+                             "positive_cond_base": ("CONDITIONING",), "negative_cond_base": ("CONDITIONING",),
+                             "base_clip": ("CLIP",),
+                             "use_seed": (['true','false'], {'default': 'false'}),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                             }
+        }
+
+    RETURN_TYPES = ('CONDITIONING','CONDITIONING',)
+    RETURN_NAMES = ('base_pos_cond','base_neg_cond',)
+    FUNCTION = 'add_style'
+    CATEGORY = 'Mikey/Conditioning'
+
+    def add_style(self, style, strength, positive_cond_base, negative_cond_base,
+                  base_clip,
+                  use_seed, seed):
+        if use_seed == 'true' and len(self.operations) > 0:
+            offset = seed % len(self.styles)
+            style = self.styles[offset]
+        pos_prompt = self.pos_style[style]
+        neg_prompt = self.neg_style[style]
+        pos_prompt = pos_prompt.replace('{prompt}', '')
+        neg_prompt = neg_prompt.replace('{prompt}', '')
+        if style == 'none':
+            return (positive_cond_base, negative_cond_base,)
+        # encode the style prompt
+        positive_cond_base_new = CLIPTextEncodeSDXL.encode(self, base_clip, 1024, 1024, 0, 0, 1024, 1024, pos_prompt, pos_prompt)[0]
+        negative_cond_base_new = CLIPTextEncodeSDXL.encode(self, base_clip, 1024, 1024, 0, 0, 1024, 1024, neg_prompt, neg_prompt)[0]
+        # average the style prompt with the existing conditioning
+        positive_cond_base = ConditioningAverage.addWeighted(self, positive_cond_base_new, positive_cond_base, strength)[0]
+        negative_cond_base = ConditioningAverage.addWeighted(self, negative_cond_base_new, negative_cond_base, strength)[0]
+        return (positive_cond_base, negative_cond_base,)
 
 def calculate_image_complexity(image):
     pil_image = tensor2pil(image)
@@ -2427,8 +2630,14 @@ class PromptWithSDXL:
                              "negative_style": ("STRING", {"multiline": True, 'default': 'Negative Style'}),
                              "ratio_selected": (s.ratio_sizes,),
                              "batch_size": ("INT", {"default": 1, "min": 1, "max": 64}),
-                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff})
-                             }
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                             "output_option": (['prompt -> clip_g and style -> clip_l',
+                                                'prompt+style -> clip_g and prompt+style -> clip_l',
+                                                'prompt+style -> clip_g and style -> clip_l',
+                                                'prompt -> clip_g and prompt+style -> clip_l',
+                                                'prompt+style -> clip_g and prompt -> clip_l'],
+                                               {"default": 'prompt -> clip_g and style -> clip_l'}),},
+                "hidden": {"extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"},
         }
 
     RETURN_TYPES = ('LATENT','STRING','STRING','STRING','STRING','INT','INT','INT','INT',)
@@ -2437,19 +2646,54 @@ class PromptWithSDXL:
     FUNCTION = 'start'
     CATEGORY = 'Mikey'
 
-    def start(self, positive_prompt, negative_prompt, positive_style, negative_style, ratio_selected, batch_size, seed):
+    def start(self, positive_prompt, negative_prompt, positive_style, negative_style, ratio_selected, batch_size, seed, output_option,
+              extra_pnginfo, prompt):
+        # search and replace
+        positive_prompt = search_and_replace(positive_prompt, extra_pnginfo, prompt)
+        negative_prompt = search_and_replace(negative_prompt, extra_pnginfo, prompt)
+        positive_style = search_and_replace(positive_style, extra_pnginfo, prompt)
+        negative_style = search_and_replace(negative_style, extra_pnginfo, prompt)
+        # wildcards
         positive_prompt = find_and_replace_wildcards(positive_prompt, seed)
         negative_prompt = find_and_replace_wildcards(negative_prompt, seed)
+        positive_style = find_and_replace_wildcards(positive_style, seed)
+        negative_style = find_and_replace_wildcards(negative_style, seed)
+        # latent dimensions
         width = self.ratio_dict[ratio_selected]["width"]
         height = self.ratio_dict[ratio_selected]["height"]
         latent = torch.zeros([batch_size, 4, height // 8, width // 8])
         refiner_width = width * 4
         refiner_height = height * 4
+        if output_option == 'prompt -> clip_g and style -> clip_l':
+            positive_clip_g = positive_prompt
+            negative_clip_g = negative_prompt
+            positive_clip_l = positive_style
+            negative_clip_l = negative_style
+        elif output_option == 'prompt+style -> clip_g and prompt+style -> clip_l':
+            positive_clip_g = positive_prompt + ', ' + positive_style
+            negative_clip_g = negative_prompt + ', ' + negative_style
+            positive_clip_l = positive_prompt + ', ' + positive_style
+            negative_clip_l = negative_prompt + ', ' + negative_style
+        elif output_option == 'prompt+style -> clip_g and style -> clip_l':
+            positive_clip_g = positive_prompt + ', ' + positive_style
+            negative_clip_g = negative_prompt + ', ' + negative_style
+            positive_clip_l = positive_style
+            negative_clip_l = negative_style
+        elif output_option == 'prompt -> clip_g and prompt+style -> clip_l':
+            positive_clip_g = positive_prompt
+            negative_clip_g = negative_prompt
+            positive_clip_l = positive_prompt + ', ' + positive_style
+            negative_clip_l = negative_prompt + ', ' + negative_style
+        elif output_option == 'prompt+style -> clip_g and prompt -> clip_l':
+            positive_clip_g = positive_prompt + ', ' + positive_style
+            negative_clip_g = negative_prompt + ', ' + negative_style
+            positive_clip_l = positive_prompt
+            negative_clip_l = negative_prompt
         return ({"samples":latent},
-                str(positive_prompt),
-                str(negative_prompt),
-                str(positive_style),
-                str(negative_style),
+                str(positive_clip_g),
+                str(negative_clip_g),
+                str(positive_clip_l),
+                str(negative_clip_l),
                 width,
                 height,
                 refiner_width,
@@ -2510,14 +2754,16 @@ class ImageCaption:
             cls.font_file_names = [os.path.basename(f) for f in cls.font_files]
             return {'required': {'image': ('IMAGE',),
                         'font': (cls.font_file_names, {'default': cls.font_file_names[0]}),
-                        'caption': ('STRING', {'multiline': True, 'default': 'Caption'})}}
+                        'caption': ('STRING', {'multiline': True, 'default': 'Caption'})},
+                    "hidden": {"extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"}}
         else:
             cls.font_dir = None
             cls.font_files = None
             cls.font_file_names = None
             return {'required': {'image': ('IMAGE',),
-                    'font': ('STRING', {'default': 'Path to font file'}),
-                    'caption': ('STRING', {'multiline': True, 'default': 'Caption'})}}
+                        'font': ('STRING', {'default': 'Path to font file'}),
+                        'caption': ('STRING', {'multiline': True, 'default': 'Caption'})},
+                    "hidden": {"extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"}}
 
 
     RETURN_TYPES = ('IMAGE',)
@@ -2542,7 +2788,9 @@ class ImageCaption:
             wrapped_lines.append(new_line)
         return wrapped_lines
 
-    def caption(self, image, font, caption):
+    def caption(self, image, font, caption, extra_pnginfo, prompt):
+        # search and replace
+        caption = search_and_replace(caption, extra_pnginfo, prompt)
         # Convert tensor to PIL image
         orig_image = tensor2pil(image)
         width, height = orig_image.size
@@ -2628,6 +2876,17 @@ class ImageBorder:
     FUNCTION = 'border'
     CATEGORY = 'Mikey/Image'
 
+    def blur_border(self, image, border_width):
+        # enlarge image and blur to create a border
+        # that has similar colors to the image edges
+        # scale factor is image with border added
+        scale_factor = (image.width + border_width * 2) / image.width
+        border_image = image.resize((int(image.width * scale_factor), int(image.height * scale_factor)))
+        border_image = border_image.filter(ImageFilter.GaussianBlur(radius=border_width * 0.5))
+        # paste image
+        border_image.paste(image, (border_width, border_width))
+        return pil2tensor(border_image)[None, :, :, :]
+
     def border(self, image, border_width, border_color):
         # Convert tensor to PIL image
         orig_image = tensor2pil(image)
@@ -2635,6 +2894,8 @@ class ImageBorder:
         # Create the border
         if border_color == 'checkerboard':
             return checkerboard_border(image, border_width, 'black')
+        if border_color == 'blur':
+            return self.blur_border(orig_image, border_width)
         # check for string containing a tuple
         if border_color.startswith('(') and border_color.endswith(')'):
             border_color = border_color[1:-1]
@@ -2664,14 +2925,19 @@ class TextCombinations2:
                              'operation': (cls.operations, {'default':cls.operations[0]}),
                              'delimiter': ('STRING', {'default': ' '}),
                              'use_seed': (['true','false'], {'default': 'false'}),
-                             'seed': ('INT', {'default': 0, 'min': 0, 'max': 0xffffffffffffffff})}}
+                             'seed': ('INT', {'default': 0, 'min': 0, 'max': 0xffffffffffffffff})},
+                "hidden": {"extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"}}
 
     RETURN_TYPES = ('STRING','STRING')
     RETURN_NAMES = ('output1','output2')
     FUNCTION = 'mix'
     CATEGORY = 'Mikey/Text'
 
-    def mix(self, text1, text2, operation, delimiter, use_seed, seed):
+    def mix(self, text1, text2, operation, delimiter, use_seed, seed, extra_pnginfo, prompt):
+        # search and replace
+        text1 = search_and_replace(text1, extra_pnginfo, prompt)
+        text2 = search_and_replace(text2, extra_pnginfo, prompt)
+
         text_dict = {'text1': text1, 'text2': text2}
         if use_seed == 'true' and len(self.operations) > 0:
             offset = seed % len(self.operations)
@@ -2716,14 +2982,20 @@ class TextCombinations3:
                              'operation': (cls.operations, {'default':cls.operations[0]}),
                              'delimiter': ('STRING', {'default': ' '}),
                              'use_seed': (['true','false'], {'default': 'false'}),
-                             'seed': ('INT', {'default': 0, 'min': 0, 'max': 0xffffffffffffffff})}}
+                             'seed': ('INT', {'default': 0, 'min': 0, 'max': 0xffffffffffffffff})},
+                "hidden": {"extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"}}
 
     RETURN_TYPES = ('STRING','STRING','STRING')
     RETURN_NAMES = ('output1','output2','output3')
     FUNCTION = 'mix'
     CATEGORY = 'Mikey/Text'
 
-    def mix(self, text1, text2, text3, operation, delimiter, use_seed, seed):
+    def mix(self, text1, text2, text3, operation, delimiter, use_seed, seed, extra_pnginfo, prompt):
+        # search and replace
+        text1 = search_and_replace(text1, extra_pnginfo, prompt)
+        text2 = search_and_replace(text2, extra_pnginfo, prompt)
+        text3 = search_and_replace(text3, extra_pnginfo, prompt)
+
         text_dict = {'text1': text1, 'text2': text2, 'text3': text3}
         if use_seed == 'true' and len(self.operations) > 0:
             offset = seed % len(self.operations)
@@ -2753,14 +3025,19 @@ class Text2InputOr3rdOption:
         return {'required': {'text_a': ('STRING', {'multiline': True, 'default': 'Text A'}),
                              'text_b': ('STRING', {'multiline': True, 'default': 'Text B'}),
                              'text_c': ('STRING', {'multiline': True, 'default': 'Text C'}),
-                             'use_text_c_for_both': (['true','false'], {'default': 'false'}),}}
+                             'use_text_c_for_both': (['true','false'], {'default': 'false'}),},
+                "hidden": {"extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"}}
 
     RETURN_TYPES = ('STRING','STRING',)
     RETURN_NAMES = ('text_a','text_b',)
     FUNCTION = 'output'
     CATEGORY = 'Mikey/Text'
 
-    def output(self, text_a, text_b, text_c, use_text_c_for_both):
+    def output(self, text_a, text_b, text_c, use_text_c_for_both, extra_pnginfo, prompt):
+        # search and replace
+        text_a = search_and_replace(text_a, extra_pnginfo, prompt)
+        text_b = search_and_replace(text_b, extra_pnginfo, prompt)
+        text_c = search_and_replace(text_c, extra_pnginfo, prompt)
         if use_text_c_for_both == 'true':
             return (text_c, text_c)
         else:
@@ -2782,6 +3059,7 @@ NODE_CLASS_MAPPINGS = {
     'Batch Resize Image for SDXL': BatchResizeImageSDXL,
     'Batch Crop Image': BatchCropImage,
     'Batch Crop Resize Inplace': BatchCropResizeInplace,
+    'Batch Load Images': BatchLoadImages,
     'Prompt With Style': PromptWithStyle,
     'Prompt With Style V2': PromptWithStyleV2,
     'Prompt With Style V3': PromptWithStyleV3,
@@ -2789,6 +3067,7 @@ NODE_CLASS_MAPPINGS = {
     'WildcardAndLoraSyntaxProcessor': WildcardAndLoraSyntaxProcessor,
     'Prompt With SDXL': PromptWithSDXL,
     'Style Conditioner': StyleConditioner,
+    'Style Conditioner Base Only': StyleConditionerBaseOnly,
     'Mikey Sampler': MikeySampler,
     'MikeySamplerTiledAdvanced': MikeySamplerTiledAdvanced,
     'Mikey Sampler Base Only': MikeySamplerBaseOnly,
@@ -2797,6 +3076,8 @@ NODE_CLASS_MAPPINGS = {
     'Mikey Sampler Tiled Base Only': MikeySamplerTiledBaseOnly,
     'AddMetaData': AddMetaData,
     'SaveMetaData': SaveMetaData,
+    'SearchAndReplace': SearchAndReplace,
+    'FileNamePrefix': FileNamePrefix,
     'HaldCLUT ': HaldCLUT,
     'Seed String': IntegerAndString,
     'Image Caption': ImageCaption,
@@ -2822,6 +3103,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Upscale Tile Calculator': 'Upscale Tile Calculator (Mikey)',
     'Batch Resize Image for SDXL': 'Batch Resize Image for SDXL (Mikey)',
     'Batch Crop Resize Inplace': 'Batch Crop Resize Inplace (Mikey)',
+    'Batch Load Images': 'Batch Load Images (Mikey)',
     'Prompt With Style V3': 'Prompt With Style (Mikey)',
     'LoraSyntaxProcessor': 'Lora Syntax Processor (Mikey)',
     'WildcardAndLoraSyntaxProcessor': 'Wildcard And Lora Syntax Processor (Mikey)',
@@ -2829,6 +3111,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Prompt With Style V2': 'Prompt With Style V2 (Mikey)',
     'Prompt With SDXL': 'Prompt With SDXL (Mikey)',
     'Style Conditioner': 'Style Conditioner (Mikey)',
+    'Style Conditioner Base Only': 'Style Conditioner Base Only (Mikey)',
     'Mikey Sampler': 'Mikey Sampler',
     'Mikey Sampler Base Only': 'Mikey Sampler Base Only',
     'Mikey Sampler Base Only Advanced': 'Mikey Sampler Base Only Advanced',
@@ -2837,6 +3120,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Mikey Sampler Tiled Base Only': 'Mikey Sampler Tiled Base Only',
     'AddMetaData': 'AddMetaData (Mikey)',
     'SaveMetaData': 'SaveMetaData (Mikey)',
+    'SearchAndReplace': 'Search And Replace (Mikey)',
+    'FileNamePrefix': 'File Name Prefix (Mikey)',
     'HaldCLUT': 'HaldCLUT (Mikey)',
     'Seed String': 'Seed String (Mikey)',
     'Image Caption': 'Image Caption (Mikey)',
