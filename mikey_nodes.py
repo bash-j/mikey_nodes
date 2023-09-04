@@ -1963,15 +1963,15 @@ class StyleConditioner:
                              }
         }
 
-    RETURN_TYPES = ('CONDITIONING','CONDITIONING','CONDITIONING','CONDITIONING',)
-    RETURN_NAMES = ('base_pos_cond','base_neg_cond','refiner_pos_cond','refiner_neg_cond',)
+    RETURN_TYPES = ('CONDITIONING','CONDITIONING','CONDITIONING','CONDITIONING','STRING',)
+    RETURN_NAMES = ('base_pos_cond','base_neg_cond','refiner_pos_cond','refiner_neg_cond','style_str',)
     FUNCTION = 'add_style'
     CATEGORY = 'Mikey/Conditioning'
 
     def add_style(self, style, strength, positive_cond_base, negative_cond_base,
                   positive_cond_refiner, negative_cond_refiner, base_clip, refiner_clip,
                   use_seed, seed):
-        if use_seed == 'true' and len(self.operations) > 0:
+        if use_seed == 'true' and len(self.styles) > 0:
             offset = seed % len(self.styles)
             style = self.styles[offset]
         pos_prompt = self.pos_style[style]
@@ -1991,7 +1991,7 @@ class StyleConditioner:
         positive_cond_refiner = ConditioningAverage.addWeighted(self, positive_cond_refiner_new, positive_cond_refiner, strength)[0]
         negative_cond_refiner = ConditioningAverage.addWeighted(self, negative_cond_refiner_new, negative_cond_refiner, strength)[0]
 
-        return (positive_cond_base, negative_cond_base, positive_cond_refiner, negative_cond_refiner,)
+        return (positive_cond_base, negative_cond_base, positive_cond_refiner, negative_cond_refiner, style,)
 
 class StyleConditionerBaseOnly:
     @classmethod
@@ -2005,15 +2005,15 @@ class StyleConditionerBaseOnly:
                              }
         }
 
-    RETURN_TYPES = ('CONDITIONING','CONDITIONING',)
-    RETURN_NAMES = ('base_pos_cond','base_neg_cond',)
+    RETURN_TYPES = ('CONDITIONING','CONDITIONING','STRING',)
+    RETURN_NAMES = ('base_pos_cond','base_neg_cond','style_str',)
     FUNCTION = 'add_style'
     CATEGORY = 'Mikey/Conditioning'
 
     def add_style(self, style, strength, positive_cond_base, negative_cond_base,
                   base_clip,
                   use_seed, seed):
-        if use_seed == 'true' and len(self.operations) > 0:
+        if use_seed == 'true' and len(self.styles) > 0:
             offset = seed % len(self.styles)
             style = self.styles[offset]
         pos_prompt = self.pos_style[style]
@@ -2028,7 +2028,7 @@ class StyleConditionerBaseOnly:
         # average the style prompt with the existing conditioning
         positive_cond_base = ConditioningAverage.addWeighted(self, positive_cond_base_new, positive_cond_base, strength)[0]
         negative_cond_base = ConditioningAverage.addWeighted(self, negative_cond_base_new, negative_cond_base, strength)[0]
-        return (positive_cond_base, negative_cond_base,)
+        return (positive_cond_base, negative_cond_base, style,)
 
 def calculate_image_complexity(image):
     pil_image = tensor2pil(image)
