@@ -477,7 +477,7 @@ class WildcardProcessor:
     CATEGORY = 'Mikey/Text'
 
     def process(self, prompt, seed, prompt_, extra_pnginfo):
-        prompt = search_and_replace(prompt, extra_pnginfo, prompt)
+        prompt = search_and_replace(prompt, extra_pnginfo, prompt_)
         prompt = find_and_replace_wildcards(prompt, seed)
         return (prompt, )
 
