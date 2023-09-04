@@ -1901,9 +1901,7 @@ class WildcardAndLoraSyntaxProcessor:
     FUNCTION = 'process'
     CATEGORY = 'Mikey/Lora'
 
-    def extract_and_load_loras(self, text, model, clip, seed, extra_pnginfo=None, prompt=None):
-        # search and replace
-        text = search_and_replace(text, extra_pnginfo, prompt)
+    def extract_and_load_loras(self, text, model, clip):
         # load loras detected in the prompt text
         # The text for adding LoRA to the prompt, <lora:filename:multiplier>, is only used to enable LoRA, and is erased from prompt afterwards
         # The multiplier is optional, and defaults to 1.0
@@ -1935,7 +1933,9 @@ class WildcardAndLoraSyntaxProcessor:
         stripped_text = re.sub(lora_re, '', stripped_text)
         return model, clip, stripped_text
 
-    def process(self, model, clip, text, seed):
+    def process(self, model, clip, text, seed, extra_pnginfo=None, prompt=None):
+        # search and replace
+        text = search_and_replace(text, extra_pnginfo, prompt)
         # first process wildcards
         text_ = find_and_replace_wildcards(text, seed, True)
         if len(text_) != len(text):
@@ -2074,13 +2074,12 @@ def calculate_image_complexity(image):
 class MikeySampler:
     @classmethod
     def INPUT_TYPES(s):
-
         return {"required": {"base_model": ("MODEL",), "refiner_model": ("MODEL",), "samples": ("LATENT",), "vae": ("VAE",),
                              "positive_cond_base": ("CONDITIONING",), "negative_cond_base": ("CONDITIONING",),
                              "positive_cond_refiner": ("CONDITIONING",), "negative_cond_refiner": ("CONDITIONING",),
                              "model_name": (folder_paths.get_filename_list("upscale_models"), ),
                              "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                             "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1}),
+                             "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.1}),
                              "hires_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.1}),}}
 
     RETURN_TYPES = ('LATENT',)
@@ -2135,13 +2134,12 @@ class MikeySampler:
 class MikeySamplerBaseOnly:
     @classmethod
     def INPUT_TYPES(s):
-
         return {"required": {"base_model": ("MODEL",), "samples": ("LATENT",),
                              "positive_cond_base": ("CONDITIONING",), "negative_cond_base": ("CONDITIONING",),
                              "vae": ("VAE",),
                              "model_name": (folder_paths.get_filename_list("upscale_models"), ),
                              "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                             "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1}),
+                             "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.1}),
                              "hires_strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 2.0, "step": 0.1}),
                              'smooth_step': ("INT", {"default": 0, "min": -1, "max": 100})}}
 
@@ -2197,7 +2195,11 @@ class MikeySamplerBaseOnlyAdvanced:
     @classmethod
     def INPUT_TYPES(s):
         s.upscale_models = folder_paths.get_filename_list("upscale_models")
-        default_model = '4x-UltraSharp.pth' if '4x-UltraSharp.pth' in s.upscale_models else s.upscale_models[0]
+        try:
+            default_model = '4x-UltraSharp.pth' if '4x-UltraSharp.pth' in s.upscale_models else s.upscale_models[0]
+            um = (s.upscale_models, {'default': default_model})
+        except:
+            um = (folder_paths.get_filename_list("upscale_models"), )
         return {"required": {"base_model": ("MODEL",),
                              "positive_cond_base": ("CONDITIONING",),
                              "negative_cond_base": ("CONDITIONING",),
@@ -2211,9 +2213,9 @@ class MikeySamplerBaseOnlyAdvanced:
                              "cfg_2": ("FLOAT", {"default": 9.5, "min": 0.1, "max": 100.0, "step": 0.1}),
                              "sampler_name": (comfy.samplers.KSampler.SAMPLERS, {'default': 'dpmpp_3m_sde_gpu'}),
                              "scheduler": (comfy.samplers.KSampler.SCHEDULERS, {'default': 'exponential'}),
-                             "upscale_model": (s.upscale_models, {'default': default_model}),
+                             "upscale_model": um,
                              "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                             "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1}),
+                             "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 10.0, "step": 0.1}),
                              "hires_denoise": ("FLOAT", {"default": 0.4, "min": 0.0, "max": 1.0, "step": 0.01}),
                              "hires_steps": ("INT", {"default": 31, "min": 1, "max": 1000}),
                              }}
