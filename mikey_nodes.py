@@ -2005,7 +2005,7 @@ class StyleConditioner:
         pos_prompt = pos_prompt.replace('{prompt}', '')
         neg_prompt = neg_prompt.replace('{prompt}', '')
         if style == 'none':
-            return (positive_cond_base, negative_cond_base, positive_cond_refiner, negative_cond_refiner,)
+            return (positive_cond_base, negative_cond_base, positive_cond_refiner, negative_cond_refiner, style, )
         # encode the style prompt
         positive_cond_base_new = CLIPTextEncodeSDXL.encode(self, base_clip, 1024, 1024, 0, 0, 1024, 1024, pos_prompt, pos_prompt)[0]
         negative_cond_base_new = CLIPTextEncodeSDXL.encode(self, base_clip, 1024, 1024, 0, 0, 1024, 1024, neg_prompt, neg_prompt)[0]
@@ -2017,7 +2017,7 @@ class StyleConditioner:
         positive_cond_refiner = ConditioningAverage.addWeighted(self, positive_cond_refiner_new, positive_cond_refiner, strength)[0]
         negative_cond_refiner = ConditioningAverage.addWeighted(self, negative_cond_refiner_new, negative_cond_refiner, strength)[0]
 
-        return (positive_cond_base, negative_cond_base, positive_cond_refiner, negative_cond_refiner, style,)
+        return (positive_cond_base, negative_cond_base, positive_cond_refiner, negative_cond_refiner, style, )
 
 class StyleConditionerBaseOnly:
     @classmethod
@@ -2047,14 +2047,14 @@ class StyleConditionerBaseOnly:
         pos_prompt = pos_prompt.replace('{prompt}', '')
         neg_prompt = neg_prompt.replace('{prompt}', '')
         if style == 'none':
-            return (positive_cond_base, negative_cond_base,)
+            return (positive_cond_base, negative_cond_base, style, )
         # encode the style prompt
         positive_cond_base_new = CLIPTextEncodeSDXL.encode(self, base_clip, 1024, 1024, 0, 0, 1024, 1024, pos_prompt, pos_prompt)[0]
         negative_cond_base_new = CLIPTextEncodeSDXL.encode(self, base_clip, 1024, 1024, 0, 0, 1024, 1024, neg_prompt, neg_prompt)[0]
         # average the style prompt with the existing conditioning
         positive_cond_base = ConditioningAverage.addWeighted(self, positive_cond_base_new, positive_cond_base, strength)[0]
         negative_cond_base = ConditioningAverage.addWeighted(self, negative_cond_base_new, negative_cond_base, strength)[0]
-        return (positive_cond_base, negative_cond_base, style,)
+        return (positive_cond_base, negative_cond_base, style, )
 
 def calculate_image_complexity(image):
     pil_image = tensor2pil(image)
