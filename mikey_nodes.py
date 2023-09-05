@@ -968,6 +968,32 @@ class BatchLoadImages:
         print(f'Loaded {len(images)} images')
         return (images,)
 
+class BatchLoadTxtPrompts:
+    # reads all the txt files in a directory and returns a list of strings
+    # which can be used as prompts to generate images
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"text_directory": ("STRING", {"multiline": False, "placeholder": "Text Directory"}),
+                             "subdirectories": (['true', 'false'], {"default": 'false'})}}
+
+    RETURN_TYPES = ('STRING',)
+    RETURN_NAMES = ('string',)
+    FUNCTION = 'batch'
+    CATEGORY = 'Mikey/Text'
+    OUTPUT_IS_LIST = (True, )
+
+    def batch(self, text_directory, subdirectories):
+        if not os.path.exists(text_directory):
+            raise Exception(f"Text directory {text_directory} does not exist")
+
+        strings = []
+        for file in os.listdir(text_directory):
+            if file.endswith('.txt'):
+                with open(os.path.join(text_directory, file), 'r') as f:
+                    strings.append(f.read())
+        print(f'Loaded {len(strings)} strings')
+        return (strings,)
+
 def get_save_image_path(filename_prefix, output_dir, image_width=0, image_height=0):
     def map_filename(filename):
         try:
@@ -2109,10 +2135,12 @@ class MikeySampler:
                                   start_step=0, last_step=18, force_full_denoise=False)[0]
         # step 2 run refiner model
         sample2 = common_ksampler(refiner_model, seed, 30, 3.5, 'dpmpp_2m', 'simple', positive_cond_refiner, negative_cond_refiner, sample1,
-                                  disable_noise=True, start_step=21, force_full_denoise=True)[0]
+                                  disable_noise=True, start_step=21, force_full_denoise=True)
         # step 3 upscale
         if upscale_by == 0:
             return sample2
+        else:
+            sample2 = sample2[0]
         pixels = vaedecoder.decode(vae, sample2)[0]
         org_width, org_height = pixels.shape[2], pixels.shape[1]
         img = iuwm.upscale(upscale_model, image=pixels)[0]
@@ -2169,9 +2197,11 @@ class MikeySamplerBaseOnly:
                                   start_step=0, last_step=14, force_full_denoise=False)[0]
         # step 2 run base model high cfg
         sample2 = common_ksampler(base_model, seed+1, 31 + smooth_step, 9.5, 'dpmpp_3m_sde_gpu', 'exponential', positive_cond_base, negative_cond_base, sample1,
-                                  disable_noise=True, start_step=15, force_full_denoise=True)[0]
+                                  disable_noise=True, start_step=15, force_full_denoise=True)
         if upscale_by == 0:
             return sample2
+        else:
+            sample2 = sample2[0]
         # step 3 upscale
         pixels = vaedecoder.decode(vae, sample2)[0]
         org_width, org_height = pixels.shape[2], pixels.shape[1]
@@ -2251,9 +2281,11 @@ class MikeySamplerBaseOnlyAdvanced:
         total_steps = steps + smooth_step
         sample2 = common_ksampler(base_model, seed+1, total_steps, cfg_2, sampler_name, scheduler,
                                   positive_cond_base, negative_cond_base, sample1,
-                                  disable_noise=True, start_step=start_step, force_full_denoise=True)[0]
+                                  disable_noise=True, start_step=start_step, force_full_denoise=True)
         if upscale_by == 0:
             return sample2
+        else:
+            sample2 = sample2[0]
         # step 3 upscale
         pixels = vaedecoder.decode(vae, sample2)[0]
         org_width, org_height = pixels.shape[2], pixels.shape[1]
