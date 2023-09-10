@@ -248,6 +248,8 @@ def find_and_replace_wildcards(prompt, offset_seed, debug=False):
     return new_prompt
 
 def search_and_replace(text, extra_pnginfo, prompt):
+    if extra_pnginfo is None or prompt is None:
+        return text
     # if %date: in text, then replace with date
     print(text)
     if '%date:' in text:
@@ -398,18 +400,51 @@ def extract_and_load_loras(text, model, clip):
 def process_random_syntax(text, seed):
         # The syntax for a random number is <random:lower_bound:upper_bound>
         # For example, <random:-1:0.5> will generate a random number between -1 and 0.5
+        print('checking for random syntax')
         random.seed(seed)
         random_re = r'<random:(-?\d*\.?\d+):(-?\d*\.?\d+)>'
         matches = re.findall(random_re, text)
-
+        print(matches)
         for match in matches:
             lower_bound, upper_bound = map(float, match)
             random_value = random.uniform(lower_bound, upper_bound)
             random_value = round(random_value, 4)
             # Replace the syntax with the generated number
             text = text.replace(f'<random:{lower_bound}:{upper_bound}>', str(random_value))
-
+        print(text)
         return text
+
+def process_random_syntax(text, seed):
+    print('checking for random syntax')
+    random.seed(seed)
+    random_re = r'<random:(-?\d*\.?\d+):(-?\d*\.?\d+)>'
+    matches = re.finditer(random_re, text)
+
+    # Create a list to hold the new segments of text
+    new_text_list = []
+    last_end = 0
+
+    # Iterate through matches
+    for match in matches:
+        lower_bound, upper_bound = map(float, match.groups())
+        random_value = random.uniform(lower_bound, upper_bound)
+        random_value = round(random_value, 4)
+
+        # Append text up to the match and the generated number
+        new_text_list.append(text[last_end:match.start()])
+        new_text_list.append(str(random_value))
+
+        # Update the index of the last match end
+        last_end = match.end()
+
+    # Append remaining text after the last match
+    new_text_list.append(text[last_end:])
+
+    # Combine the list into a single string
+    new_text = ''.join(new_text_list)
+
+    print(new_text)
+    return new_text
 
 def read_cluts():
     p = os.path.dirname(os.path.realpath(__file__))
@@ -1267,6 +1302,30 @@ class SaveImageNoDisplay(SaveImagesMikeyML):
                     prompt, extra_pnginfo)
         return (None,)
 
+class SaveImageIfTrue:
+    # only saves image if save condition input is 1
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"image": ("IMAGE",),
+                             "save_condition": ("INT", {"default": 0, "min": 0, "max": 1}),
+                             "filename_prefix": ("STRING", {"default": ""})},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+                }
+
+    RETURN_TYPES = ()
+    FUNCTION = "save_image_if_true"
+    OUTPUT_NODE = True
+    CATEGORY = "Mikey/Image"
+
+    def save_image_if_true(self, image, save_condition, filename_prefix, prompt=None, extra_pnginfo=None):
+        if save_condition == 1:
+            # use SaveImagesMikey class
+            save_images = SaveImagesMikey()
+            result = save_images.save_images(image, filename_prefix, prompt, extra_pnginfo, positive_prompt='', negative_prompt='')
+            return result
+        else:
+            return {'save_image_if_true': {'filename': '', 'subfolder': ''}}
+
 class AddMetaData:
     @classmethod
     def INPUT_TYPES(s):
@@ -1882,10 +1941,10 @@ class LoraSyntaxProcessor:
     CATEGORY = 'Mikey/Lora'
 
     def process(self, model, clip, text, seed, extra_pnginfo=None, prompt=None):
-        # search and replace
-        text = search_and_replace(text, extra_pnginfo, prompt)
         # process random syntax
         text = process_random_syntax(text, seed)
+        # search and replace
+        text = search_and_replace(text, extra_pnginfo, prompt)
         lora_re = r'<lora:(.*?)(?::(.*?))?>'
         # find all lora prompts
         lora_prompts = re.findall(lora_re, text)
@@ -1962,14 +2021,14 @@ class WildcardAndLoraSyntaxProcessor:
     def process(self, model, clip, text, seed, extra_pnginfo=None, prompt=None):
         # search and replace
         text = search_and_replace(text, extra_pnginfo, prompt)
-        # first process wildcards
+        # process random syntax
+        text = process_random_syntax(text, seed)
+        # process wildcards
         text_ = find_and_replace_wildcards(text, seed, True)
         if len(text_) != len(text):
             seed = random.randint(0, 1000000)
         else:
             seed = 0
-        # process random syntax
-        text_ = process_random_syntax(text_, seed)
         # extract and load loras
         model, clip, stripped_text = self.extract_and_load_loras(text_, model, clip)
         # process wildcards again
@@ -3088,6 +3147,7 @@ NODE_CLASS_MAPPINGS = {
     'Save Image With Prompt Data': SaveImagesMikey,
     'Save Images Mikey': SaveImagesMikeyML,
     'Save Images No Display': SaveImageNoDisplay,
+    'Save Image If True': SaveImageIfTrue,
     'Resize Image for SDXL': ResizeImageSDXL,
     'Upscale Tile Calculator': UpscaleTileCalculator,
     'Batch Resize Image for SDXL': BatchResizeImageSDXL,
@@ -3132,6 +3192,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Save Images With Prompt Data': 'Save Image With Prompt Data (Mikey)',
     'Save Images Mikey': 'Save Images Mikey (Mikey)',
     'Save Images No Display': 'Save Images No Display (Mikey)',
+    'Save Image If True': 'Save Image If True (Mikey)',
     'Resize Image for SDXL': 'Resize Image for SDXL (Mikey)',
     'Batch Crop Image': 'Batch Crop Image (Mikey)',
     'Upscale Tile Calculator': 'Upscale Tile Calculator (Mikey)',
