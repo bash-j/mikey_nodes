@@ -251,7 +251,7 @@ def search_and_replace(text, extra_pnginfo, prompt):
     if extra_pnginfo is None or prompt is None:
         return text
     # if %date: in text, then replace with date
-    print(text)
+    #print(text)
     if '%date:' in text:
         for match in re.finditer(r'%date:(.*?)%', text):
             date_match = match.group(1)
@@ -297,10 +297,13 @@ def search_and_replace(text, extra_pnginfo, prompt):
 
     # Map from "Node name for S&R" to id in the workflow
     node_to_id_map = {}
-    for node in extra_pnginfo['workflow']['nodes']:
-        node_name = node['properties'].get('Node name for S&R')
-        node_id = node['id']
-        node_to_id_map[node_name] = node_id
+    try:
+        for node in extra_pnginfo['workflow']['nodes']:
+            node_name = node['properties'].get('Node name for S&R')
+            node_id = node['id']
+            node_to_id_map[node_name] = node_id
+    except:
+        return text
 
     # Find all patterns in the text that need to be replaced
     patterns = re.findall(r"%([^%]+)%", text)
@@ -311,18 +314,18 @@ def search_and_replace(text, extra_pnginfo, prompt):
         # Find the id for this node name
         node_id = node_to_id_map.get(node_name)
         if node_id is None:
-            print(f"No node with name {node_name} found.")
+            #print(f"No node with name {node_name} found.")
             continue
 
         # Find the value of the specified widget in prompt JSON
         prompt_node = prompt.get(str(node_id))
         if prompt_node is None:
-            print(f"No prompt data for node with id {node_id}.")
+            #print(f"No prompt data for node with id {node_id}.")
             continue
 
         widget_value = prompt_node['inputs'].get(widget_name)
         if widget_value is None:
-            print(f"No widget with name {widget_name} found for node {node_name}.")
+            #print(f"No widget with name {widget_name} found for node {node_name}.")
             continue
 
         # Replace the pattern in the text
@@ -398,24 +401,7 @@ def extract_and_load_loras(text, model, clip):
     return model, clip, stripped_text
 
 def process_random_syntax(text, seed):
-        # The syntax for a random number is <random:lower_bound:upper_bound>
-        # For example, <random:-1:0.5> will generate a random number between -1 and 0.5
-        print('checking for random syntax')
-        random.seed(seed)
-        random_re = r'<random:(-?\d*\.?\d+):(-?\d*\.?\d+)>'
-        matches = re.findall(random_re, text)
-        print(matches)
-        for match in matches:
-            lower_bound, upper_bound = map(float, match)
-            random_value = random.uniform(lower_bound, upper_bound)
-            random_value = round(random_value, 4)
-            # Replace the syntax with the generated number
-            text = text.replace(f'<random:{lower_bound}:{upper_bound}>', str(random_value))
-        print(text)
-        return text
-
-def process_random_syntax(text, seed):
-    print('checking for random syntax')
+    #print('checking for random syntax')
     random.seed(seed)
     random_re = r'<random:(-?\d*\.?\d+):(-?\d*\.?\d+)>'
     matches = re.finditer(random_re, text)
@@ -443,7 +429,7 @@ def process_random_syntax(text, seed):
     # Combine the list into a single string
     new_text = ''.join(new_text_list)
 
-    print(new_text)
+    #print(new_text)
     return new_text
 
 def read_cluts():
@@ -511,7 +497,11 @@ class WildcardProcessor:
     FUNCTION = 'process'
     CATEGORY = 'Mikey/Text'
 
-    def process(self, prompt, seed, prompt_, extra_pnginfo):
+    def process(self, prompt, seed, prompt_=None, extra_pnginfo=None):
+        if prompt_ is None:
+            prompt_ = {}
+        if extra_pnginfo is None:
+            extra_pnginfo = {}
         prompt = search_and_replace(prompt, extra_pnginfo, prompt_)
         prompt = find_and_replace_wildcards(prompt, seed)
         return (prompt, )
@@ -810,6 +800,50 @@ class FLOATtoSTRING:
         else:
             return (f'{float_}', )
 
+class RangeFloat:
+    # using the seed value as the step in a range
+    # generate a list of numbers from start to end with a step value
+    # then select the number at the offset value
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"start": ("FLOAT", {"default": 0, "min": 0, "step": 0.0001, "max": 0xffffffffffffffff}),
+                             "end": ("FLOAT", {"default": 0, "min": 0, "step": 0.0001, "max": 0xffffffffffffffff}),
+                             "step": ("FLOAT", {"default": 0, "min": 0, "step": 0.0001, "max": 0xffffffffffffffff}),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff})}}
+
+    RETURN_TYPES = ('FLOAT','STRING',)
+    FUNCTION = 'generate'
+    CATEGORY = 'Mikey/Utils'
+
+    def generate(self, start, end, step, seed):
+        range_ = np.arange(start, end, step)
+        list_of_numbers = list(range_)
+        # offset
+        offset = seed % len(list_of_numbers)
+        return (list_of_numbers[offset], f'{list_of_numbers[offset]}',)
+
+class RangeInteger:
+    # using the seed value as the step in a range
+    # generate a list of numbers from start to end with a step value
+    # then select the number at the offset value
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"start": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                             "end": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                             "step": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff})}}
+
+    RETURN_TYPES = ('INT','STRING',)
+    FUNCTION = 'generate'
+    CATEGORY = 'Mikey/Utils'
+
+    def generate(self, start, end, step, seed):
+        range_ = np.arange(start, end, step)
+        list_of_numbers = list(range_)
+        # offset
+        offset = seed % len(list_of_numbers)
+        return (list_of_numbers[offset], f'{list_of_numbers[offset]}',)
+
 class ResizeImageSDXL:
     crop_methods = ["disabled", "center"]
     upscale_methods = ["nearest-exact", "bilinear", "area", "bicubic"]
@@ -831,7 +865,7 @@ class ResizeImageSDXL:
 
     def resize(self, image, upscale_method, crop):
         w, h = find_latent_size(image.shape[2], image.shape[1])
-        print('Resizing image from {}x{} to {}x{}'.format(image.shape[2], image.shape[1], w, h))
+        #print('Resizing image from {}x{} to {}x{}'.format(image.shape[2], image.shape[1], w, h))
         img = self.upscale(image, upscale_method, w, h, crop)[0]
         return (img, )
 
@@ -1000,7 +1034,7 @@ class BatchLoadImages:
                 img = Image.open(os.path.join(image_directory, file))
                 img = pil2tensor(img)
                 images.append(img)
-        print(f'Loaded {len(images)} images')
+        #print(f'Loaded {len(images)} images')
         return (images,)
 
 class BatchLoadTxtPrompts:
@@ -1026,7 +1060,7 @@ class BatchLoadTxtPrompts:
             if file.endswith('.txt'):
                 with open(os.path.join(text_directory, file), 'r') as f:
                     strings.append(f.read())
-        print(f'Loaded {len(strings)} strings')
+        #print(f'Loaded {len(strings)} strings')
         return (strings,)
 
 def get_save_image_path(filename_prefix, output_dir, image_width=0, image_height=0):
@@ -1059,7 +1093,7 @@ def get_save_image_path(filename_prefix, output_dir, image_width=0, image_height
     full_output_folder = os.path.join(output_dir, subfolder)
 
     if os.path.commonpath((output_dir, os.path.abspath(full_output_folder))) != output_dir:
-        print("Saving image outside the output folder is not allowed.")
+        #print("Saving image outside the output folder is not allowed.")
         return {}
 
     try:
@@ -1457,12 +1491,12 @@ class PromptWithStyle:
         positive_prompt = process_random_syntax(positive_prompt, seed)
         negative_prompt = process_random_syntax(negative_prompt, seed)
         # process wildcards
-        print('Positive Prompt Entered:', positive_prompt)
+        #print('Positive Prompt Entered:', positive_prompt)
         pos_prompt = find_and_replace_wildcards(positive_prompt, seed, debug=True)
-        print('Positive Prompt:', pos_prompt)
-        print('Negative Prompt Entered:', negative_prompt)
+        #print('Positive Prompt:', pos_prompt)
+        #print('Negative Prompt Entered:', negative_prompt)
         neg_prompt = find_and_replace_wildcards(negative_prompt, seed, debug=True)
-        print('Negative Prompt:', neg_prompt)
+        #print('Negative Prompt:', neg_prompt)
         if pos_prompt != '' and pos_prompt != 'Positive Prompt' and pos_prompt is not None:
             if '{prompt}' in self.pos_style[style]:
                 pos_prompt = self.pos_style[style].replace('{prompt}', pos_prompt)
@@ -1486,9 +1520,9 @@ class PromptWithStyle:
         target_width, target_height = (4096, 4096 * ratio // 8 * 8) if width > height else (4096 * ratio // 8 * 8, 4096)
         refiner_width = target_width
         refiner_height = target_height
-        print('Width:', width, 'Height:', height,
-              'Target Width:', target_width, 'Target Height:', target_height,
-              'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
+        #print('Width:', width, 'Height:', height,
+        #      'Target Width:', target_width, 'Target Height:', target_height,
+        #      'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
         latent = torch.zeros([batch_size, 4, height // 8, width // 8])
         return ({"samples":latent},
                 str(pos_prompt),
@@ -1540,9 +1574,9 @@ class PromptWithStyleV2:
         target_width, target_height = (4096, 4096 * ratio // 8 * 8) if width > height else (4096 * ratio // 8 * 8, 4096)
         refiner_width = target_width
         refiner_height = target_height
-        print('Width:', width, 'Height:', height,
-              'Target Width:', target_width, 'Target Height:', target_height,
-              'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
+        #print('Width:', width, 'Height:', height,
+        #     'Target Width:', target_width, 'Target Height:', target_height,
+        #     'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
         # encode text
         sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base, width, height, 0, 0, target_width, target_height, pos_prompt, pos_style)[0]
         sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base, width, height, 0, 0, target_width, target_height, neg_prompt, neg_style)[0]
@@ -1595,9 +1629,9 @@ class PromptWithSDXL:
         target_width, target_height = (4096, 4096 * ratio // 8 * 8) if width > height else (4096 * ratio // 8 * 8, 4096)
         refiner_width = target_width
         refiner_height = target_height
-        print('Width:', width, 'Height:', height,
-              'Target Width:', target_width, 'Target Height:', target_height,
-              'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
+        #print('Width:', width, 'Height:', height,
+        #      'Target Width:', target_width, 'Target Height:', target_height,
+        #      'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
         return ({"samples":latent},
                 str(positive_prompt),
                 str(negative_prompt),
@@ -1665,7 +1699,7 @@ class PromptWithStyleV3:
                     lora_filename += '.safetensors'
                 # get the lora multiplier
                 lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
-                print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
+                #print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
                 # apply the lora to the clip using the LoraLoader.load_lora function
                 # def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
                 # ...
@@ -1721,7 +1755,7 @@ class PromptWithStyleV3:
             height = self.ratio_dict[ratio_selected]["height"]
 
         latent = torch.zeros([batch_size, 4, height // 8, width // 8])
-        print(batch_size, 4, height // 8, width // 8)
+        #print(batch_size, 4, height // 8, width // 8)
         # calculate dimensions for target_width, target height (base) and refiner_width, refiner_height (refiner)
         ratio = min([width, height]) / max([width, height])
         if target_mode == 'match':
@@ -1760,9 +1794,9 @@ class PromptWithStyleV3:
             target_width, target_height = (2048, 2048 * ratio // 8 * 8) if width < height else (2048 * ratio // 8 * 8, 2048)
             refiner_width, refiner_height = width * 4, height * 4
             #refiner_width, refiner_height = (4096, 4096 * ratio // 8 * 8) if width > height else (4096 * ratio // 8 * 8, 4096)
-        print('Width:', width, 'Height:', height,
-              'Target Width:', target_width, 'Target Height:', target_height,
-              'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
+        #print('Width:', width, 'Height:', height,
+        #      'Target Width:', target_width, 'Target Height:', target_height,
+        #      'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
         add_metadata_to_dict(prompt_with_style, width=width, height=height, target_width=target_width, target_height=target_height,
                              refiner_width=refiner_width, refiner_height=refiner_height, crop_w=0, crop_h=0)
         # search and replace
@@ -1809,7 +1843,7 @@ class PromptWithStyleV3:
         neg_style_prompts = re.findall(style_re, neg_prompt)
         # concat style prompts
         style_prompts = pos_style_prompts + neg_style_prompts
-        print(style_prompts)
+        #print(style_prompts)
         base_pos_conds = []
         base_neg_conds = []
         refiner_pos_conds = []
@@ -1820,10 +1854,10 @@ class PromptWithStyleV3:
             pos_style_, neg_style_ = pos_prompt_, neg_prompt_
             pos_prompt_, neg_prompt_ = strip_all_syntax(pos_prompt_), strip_all_syntax(neg_prompt_)
             pos_style_, neg_style_ = strip_all_syntax(pos_style_), strip_all_syntax(neg_style_)
-            print("pos_prompt_", pos_prompt_)
-            print("neg_prompt_", neg_prompt_)
-            print("pos_style_", pos_style_)
-            print("neg_style_", neg_style_)
+            #print("pos_prompt_", pos_prompt_)
+            #print("neg_prompt_", neg_prompt_)
+            #print("pos_style_", pos_style_)
+            #print("neg_style_", neg_style_)
             # encode text
             add_metadata_to_dict(prompt_with_style, style=style_, clip_g_positive=pos_prompt, clip_l_positive=pos_style_)
             add_metadata_to_dict(prompt_with_style, clip_g_negative=neg_prompt, clip_l_negative=neg_style_)
@@ -1840,13 +1874,13 @@ class PromptWithStyleV3:
             """ get output from PromptWithStyle.start """
             # strip all style syntax from prompt
             style_ = style_prompt
-            print(style_ in self.styles)
+            #print(style_ in self.styles)
             if style_ not in self.styles:
                 # try to match a key without being case sensitive
                 style_search = next((x for x in self.styles if x.lower() == style_.lower()), None)
                 # if there are still no matches
                 if style_search is None:
-                    print(f'Could not find style: {style_}')
+                    #print(f'Could not find style: {style_}')
                     style_ = 'none'
                     continue
                 else:
@@ -1950,6 +1984,7 @@ class LoraSyntaxProcessor:
         lora_prompts = re.findall(lora_re, text)
         stripped_text = text
         # if we found any lora prompts
+        clip_lora = clip
         if len(lora_prompts) > 0:
             # loop through each lora prompt
             for lora_prompt in lora_prompts:
@@ -1960,7 +1995,7 @@ class LoraSyntaxProcessor:
                     lora_filename += '.safetensors'
                 # get the lora multiplier
                 lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
-                print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
+                #print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
                 model, clip_lora = LoraLoader.load_lora(self, model, clip, lora_filename, lora_multiplier, lora_multiplier)
         # strip lora syntax from text
         stripped_text = re.sub(lora_re, '', stripped_text)
@@ -1997,6 +2032,7 @@ class WildcardAndLoraSyntaxProcessor:
         lora_prompts = re.findall(lora_re, text)
         stripped_text = text
         # if we found any lora prompts
+        clip_lora = clip
         if len(lora_prompts) > 0:
             # loop through each lora prompt
             for lora_prompt in lora_prompts:
@@ -2007,7 +2043,7 @@ class WildcardAndLoraSyntaxProcessor:
                     lora_filename += '.safetensors'
                 # get the lora multiplier
                 lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
-                print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
+                #print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
                 # apply the lora to the clip using the LoraLoader.load_lora function
                 # def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
                 # ...
@@ -2209,7 +2245,7 @@ class MikeySampler:
             return (vaeencoder.encode(vae, img)[0],)
         # Adjust start_step based on complexity
         image_complexity = calculate_image_complexity(img)
-        print('Image Complexity:', image_complexity)
+        #print('Image Complexity:', image_complexity)
         start_step = self.adjust_start_step(image_complexity, hires_strength)
         # encode image
         latent = vaeencoder.encode(vae, img)[0]
@@ -2271,7 +2307,7 @@ class MikeySamplerBaseOnly:
             return (vaeencoder.encode(vae, img)[0],)
         # Adjust start_step based on complexity
         image_complexity = calculate_image_complexity(img)
-        print('Image Complexity:', image_complexity)
+        #print('Image Complexity:', image_complexity)
         start_step = self.adjust_start_step(image_complexity, hires_strength)
         # encode image
         latent = vaeencoder.encode(vae, img)[0]
@@ -2331,7 +2367,7 @@ class MikeySamplerBaseOnlyAdvanced:
                 last_step = steps // 2 - 1
             else:
                 last_step = steps // 2
-        print(f'base model start_step: {start_step}, last_step: {last_step}')
+        #print(f'base model start_step: {start_step}, last_step: {last_step}')
         sample1 = common_ksampler(base_model, seed, steps, cfg_1, sampler_name, scheduler,
                                   positive_cond_base, negative_cond_base, samples,
                                   start_step=start_step, last_step=last_step, force_full_denoise=False)[0]
@@ -2489,7 +2525,7 @@ def ai_upscale(tile, base_model, vae, seed, positive_cond_base, negative_cond_ba
     vaeencoder = VAEEncode()
     tile = pil2tensor(tile)
     complexity = calculate_image_complexity(tile)
-    print('Tile Complexity:', complexity)
+    #print('Tile Complexity:', complexity)
     if use_complexity_score == 'true':
         if complexity < 8:
             start_step = 15
@@ -2617,13 +2653,13 @@ class MikeySamplerTiledAdvanced:
                 last_step = steps // 2 - 1
             else:
                 last_step = steps // 2
-        print(f'base model start_step: {start_step}, last_step: {last_step}')
+        #print(f'base model start_step: {start_step}, last_step: {last_step}')
         sample1 = common_ksampler(base_model, seed, steps, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, samples,
                                   start_step=start_step, last_step=last_step, force_full_denoise=False)[0]
         # step 2 run refiner model
         start_step = last_step + 1
         total_steps = steps + smooth_step
-        print(f'refiner model start_step: {start_step}, last_step: {total_steps}')
+        #print(f'refiner model start_step: {start_step}, last_step: {total_steps}')
         sample2 = common_ksampler(refiner_model, seed, total_steps, cfg, sampler_name, scheduler, positive_cond_refiner, negative_cond_refiner, sample1,
                                   disable_noise=True, start_step=start_step, force_full_denoise=True)[0]
         # step 3 upscale image using a simple AI image upscaler
@@ -2706,7 +2742,7 @@ class MikeySamplerTiledBaseOnly(MikeySamplerTiled):
         # phase 1: run base, refiner, then upscaler model
         img, upscaled_width, upscaled_height = self.phase_one(base_model, samples, positive_cond_base, negative_cond_base,
                                                               upscale_by, model_name, seed, vae)
-        print('img shape: ', img.shape)
+        #print('img shape: ', img.shape)
         # phase 2: run tiler
         img = tensor2pil(img)
         tiled_image = run_tiler(img, base_model, vae, seed, positive_cond_base, negative_cond_base, tiler_denoise)
@@ -2812,14 +2848,14 @@ class UpscaleTileCalculator:
 
     def resize(self, image, width, height, upscale_method, crop):
         w, h = find_latent_size(image.shape[2], image.shape[1])
-        print('Resizing image from {}x{} to {}x{}'.format(image.shape[2], image.shape[1], w, h))
+        #print('Resizing image from {}x{} to {}x{}'.format(image.shape[2], image.shape[1], w, h))
         img = self.upscale(image, upscale_method, w, h, crop)[0]
         return (img, )
 
     def calculate(self, image, tile_resolution):
         width, height = image.shape[2], image.shape[1]
         tile_width, tile_height = find_tile_dimensions(width, height, 1.0, tile_resolution)
-        print('Tile width: ' + str(tile_width), 'Tile height: ' + str(tile_height))
+        #print('Tile width: ' + str(tile_width), 'Tile height: ' + str(tile_height))
         return (image, tile_width, tile_height)
 
 class IntegerAndString:
@@ -2881,7 +2917,9 @@ class ImageCaption:
             wrapped_lines.append(new_line)
         return wrapped_lines
 
-    def caption(self, image, font, caption, extra_pnginfo, prompt):
+    def caption(self, image, font, caption, extra_pnginfo=None, prompt=None):
+        if extra_pnginfo is None:
+            extra_pnginfo = {}
         # search and replace
         caption = search_and_replace(caption, extra_pnginfo, prompt)
         # Convert tensor to PIL image
@@ -3144,6 +3182,8 @@ NODE_CLASS_MAPPINGS = {
     'Ratio Advanced': RatioAdvanced,
     'Int to String': INTtoSTRING,
     'Float to String': FLOATtoSTRING,
+    'Range Float': RangeFloat,
+    'Range Integer': RangeInteger,
     'Save Image With Prompt Data': SaveImagesMikey,
     'Save Images Mikey': SaveImagesMikeyML,
     'Save Images No Display': SaveImageNoDisplay,
@@ -3189,6 +3229,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Ratio Advanced': 'Ratio Advanced (Mikey)',
     'Int to String': 'Int to String (Mikey)',
     'Float to String': 'Float to String (Mikey)',
+    'Range Float': 'Range Float (Mikey)',
+    'Range Integer': 'Range Integer (Mikey)',
     'Save Images With Prompt Data': 'Save Image With Prompt Data (Mikey)',
     'Save Images Mikey': 'Save Images Mikey (Mikey)',
     'Save Images No Display': 'Save Images No Display (Mikey)',
