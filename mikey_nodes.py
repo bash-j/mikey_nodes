@@ -1699,7 +1699,7 @@ class PromptWithStyleV3:
                     lora_filename += '.safetensors'
                 # get the lora multiplier
                 lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
-                #print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
+                print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
                 # apply the lora to the clip using the LoraLoader.load_lora function
                 # def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
                 # ...
@@ -1995,7 +1995,7 @@ class LoraSyntaxProcessor:
                     lora_filename += '.safetensors'
                 # get the lora multiplier
                 lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
-                #print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
+                print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
                 model, clip_lora = LoraLoader.load_lora(self, model, clip, lora_filename, lora_multiplier, lora_multiplier)
         # strip lora syntax from text
         stripped_text = re.sub(lora_re, '', stripped_text)
@@ -2043,7 +2043,7 @@ class WildcardAndLoraSyntaxProcessor:
                     lora_filename += '.safetensors'
                 # get the lora multiplier
                 lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
-                #print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
+                print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
                 # apply the lora to the clip using the LoraLoader.load_lora function
                 # def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
                 # ...
