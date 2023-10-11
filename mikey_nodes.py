@@ -2909,11 +2909,19 @@ class ImageCaption:
             new_line = words[0]
             for word in words[1:]:
                 # If line can fit the word, add it
-                if font.getsize(new_line + ' ' + word)[0] <= max_width:
-                    new_line += ' ' + word
-                else:
-                    wrapped_lines.append(new_line)
-                    new_line = word
+                try:
+                    if font.getsize(new_line + ' ' + word)[0] <= max_width:
+                        new_line += ' ' + word
+                    else:
+                        wrapped_lines.append(new_line)
+                        new_line = word
+                except AttributeError:
+                    # use new getlength method instead of deprecated getsize
+                    if font.getlength(new_line + ' ' + word) <= max_width:
+                        new_line += ' ' + word
+                    else:
+                        wrapped_lines.append(new_line)
+                        new_line = word
             wrapped_lines.append(new_line)
         return wrapped_lines
 
@@ -2953,7 +2961,11 @@ class ImageCaption:
 
         y_position = (caption_height - wrapped_text_height) // 2
         for line in wrapped_lines:
-            text_width, text_height = font.getsize(line)
+            try:
+                text_width, text_height = font.getsize(line)
+            except AttributeError:
+                # use new getlength method instead of deprecated getsize
+                text_width, text_height = font.getlength(line)
             x_position = (width - text_width) // 2
             draw.text((x_position, y_position), line, (255, 255, 255), font=font)
             y_position += text_height
