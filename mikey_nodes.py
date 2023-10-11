@@ -2900,28 +2900,39 @@ class ImageCaption:
     FUNCTION = 'caption'
     CATEGORY = 'Mikey/Image'
 
+    def get_text_size(self, font, text):
+        """
+        Get width and height of a text string with given font.
+
+        Parameters:
+            font (ImageFont.FreeTypeFont): A font object.
+            text (str): Text to measure.
+
+        Returns:
+            (int, int): Width and height of the text.
+        """
+        # Get the bounding box of the text
+        left, top, right, bottom = font.getbbox(text)
+
+        # Calculate width and height of the bounding box
+        width = right - left
+        height = bottom - top
+
+        return width, height
+
     def wrap_text(self, text, font, max_width):
         """Wrap text to fit inside a specified width when rendered."""
         wrapped_lines = []
         for line in text.split('\n'):
-            # Split lines by spaces to avoid breaking words
             words = line.split(' ')
             new_line = words[0]
             for word in words[1:]:
-                # If line can fit the word, add it
-                try:
-                    if font.getsize(new_line + ' ' + word)[0] <= max_width:
-                        new_line += ' ' + word
-                    else:
-                        wrapped_lines.append(new_line)
-                        new_line = word
-                except AttributeError:
-                    # use new getlength method instead of deprecated getsize
-                    if font.getlength(new_line + ' ' + word) <= max_width:
-                        new_line += ' ' + word
-                    else:
-                        wrapped_lines.append(new_line)
-                        new_line = word
+                # Ensure that the width value is an integer
+                if int(font.getlength(new_line + ' ' + word)) <= max_width:
+                    new_line += ' ' + word
+                else:
+                    wrapped_lines.append(new_line)
+                    new_line = word
             wrapped_lines.append(new_line)
         return wrapped_lines
 
@@ -2948,30 +2959,30 @@ class ImageCaption:
         wrapped_lines = self.wrap_text(caption, font, max_width)
 
         # Calculate height needed for wrapped text
-        try:
-            wrapped_text_height = len(wrapped_lines) * font.getsize('A')[1]  # Estimate using height of letter 'A'
-        except AttributeError:
-            # use new getlength method instead of deprecated getsize
-            wrapped_text_height = len(wrapped_lines) * font.getlength('A')  # Estimate using height of letter 'A'
+        _, text_height = self.get_text_size(font, "H")  # Height of a tall character
+        wrapped_text_height = len(wrapped_lines) * text_height
         caption_height = wrapped_text_height + 25  # A little buffer for better visual appeal
 
         # Create the caption bar
         text_image = Image.new('RGB', (width, caption_height), (0, 0, 0))
         draw = ImageDraw.Draw(text_image)
 
-        y_position = (caption_height - wrapped_text_height) // 2
+        line_spacing = 10  # Adjust to desired spacing
+
+        # Start y_position a bit higher
+        y_position = (caption_height - wrapped_text_height - (line_spacing * (len(wrapped_lines) - 1))) // 2
+
         for line in wrapped_lines:
-            try:
-                text_width, text_height = font.getsize(line)
-            except AttributeError:
-                # use new getlength method instead of deprecated getsize
-                text_width, text_height = font.getlength(line)
-            x_position = (width - text_width) // 2
+            # try/except block is removed since getsize() is not used anymore
+            text_width = font.getlength(line)  # It should return a float, so ensure that x_position is an integer.
+            x_position = (width - int(text_width)) // 2
             draw.text((x_position, y_position), line, (255, 255, 255), font=font)
-            y_position += text_height
+
+            _, text_height = self.get_text_size(font, line)  # Calculate text height
+            y_position += text_height  # Increment y position by text height and line spacing
 
         # Combine the images
-        combined_image = Image.new('RGB', (width, height + caption_height), (0, 0, 0))
+        combined_image = Image.new('RGB', (width, height + caption_height + line_spacing), (0, 0, 0))
         combined_image.paste(text_image, (0, height))
         combined_image.paste(orig_image, (0, 0))
 
