@@ -2940,7 +2940,11 @@ class ImageCaption:
         wrapped_lines = self.wrap_text(caption, font, max_width)
 
         # Calculate height needed for wrapped text
-        wrapped_text_height = len(wrapped_lines) * font.getsize('A')[1]  # Estimate using height of letter 'A'
+        try:
+            wrapped_text_height = len(wrapped_lines) * font.getsize('A')[1]  # Estimate using height of letter 'A'
+        except AttributeError:
+            # use new getlength method instead of deprecated getsize
+            wrapped_text_height = len(wrapped_lines) * font.getlength('A')  # Estimate using height of letter 'A'
         caption_height = wrapped_text_height + 25  # A little buffer for better visual appeal
 
         # Create the caption bar
