@@ -1114,7 +1114,8 @@ class SaveImagesMikey:
                     {"images": ("IMAGE", ),
                      "positive_prompt": ("STRING", {'default': 'Positive Prompt'}),
                      "negative_prompt": ("STRING", {'default': 'Negative Prompt'}),
-                     "filename_prefix": ("STRING", {"default": ""}),},
+                     "filename_prefix": ("STRING", {"default": ""}),
+                     "parameters": ("STRING", {"default": ""}),},
                 "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
                 }
 
@@ -1123,7 +1124,7 @@ class SaveImagesMikey:
     OUTPUT_NODE = True
     CATEGORY = "Mikey/Image"
 
-    def save_images(self, images, filename_prefix='', prompt=None, extra_pnginfo=None, positive_prompt='', negative_prompt=''):
+    def save_images(self, images, filename_prefix='', parameters='', prompt=None, extra_pnginfo=None, positive_prompt='', negative_prompt=''):
         filename_prefix = search_and_replace(filename_prefix, extra_pnginfo, prompt)
         full_output_folder, filename, counter, subfolder, filename_prefix = get_save_image_path(filename_prefix, self.output_dir, images[0].shape[1], images[0].shape[0])
         results = list()
@@ -1150,6 +1151,8 @@ class SaveImagesMikey:
             else:
                 ts_str = datetime.datetime.now().strftime("%y%m%d%H%M%S")
                 file = f"{ts_str}_{pos_trunc}_{filename}_{counter:05}_.png"
+            if parameters:
+                metadata.add_text("parameters", parameters)
             img.save(os.path.join(full_output_folder, file), pnginfo=metadata, compress_level=4)
             results.append({
                 "filename": file,
@@ -2959,18 +2962,20 @@ class ImageCaption:
         wrapped_lines = self.wrap_text(caption, font, max_width)
 
         # Calculate height needed for wrapped text
-        _, text_height = self.get_text_size(font, "H")  # Height of a tall character
+        _, text_height = self.get_text_size(font, "Hg")  # Height of a tall character
         wrapped_text_height = len(wrapped_lines) * text_height
-        caption_height = wrapped_text_height + 25  # A little buffer for better visual appeal
+        padding = 15  # Adequate padding considering ascenders and descenders
+        caption_height = wrapped_text_height + padding * 2  # Additional space above and below text
 
         # Create the caption bar
         text_image = Image.new('RGB', (width, caption_height), (0, 0, 0))
         draw = ImageDraw.Draw(text_image)
 
-        line_spacing = 10  # Adjust to desired spacing
+        line_spacing = 5  # Adjust to desired spacing
 
         # Start y_position a bit higher
-        y_position = (caption_height - wrapped_text_height - (line_spacing * (len(wrapped_lines) - 1))) // 2
+        #y_position = (caption_height - wrapped_text_height - (line_spacing * (len(wrapped_lines) - 1))) // 2
+        y_position = padding
 
         for line in wrapped_lines:
             # try/except block is removed since getsize() is not used anymore
@@ -2979,7 +2984,7 @@ class ImageCaption:
             draw.text((x_position, y_position), line, (255, 255, 255), font=font)
 
             _, text_height = self.get_text_size(font, line)  # Calculate text height
-            y_position += text_height  # Increment y position by text height and line spacing
+            y_position += text_height + line_spacing # Increment y position by text height and line spacing
 
         # Combine the images
         combined_image = Image.new('RGB', (width, height + caption_height + line_spacing), (0, 0, 0))
@@ -3062,6 +3067,45 @@ class ImageBorder:
         border_image.paste(orig_image, (border_width, border_width))
 
         return (pil2tensor(border_image),)
+
+class ImagePaste:
+    # takes 2 images, background image and foreground image with transparency areas
+    # and pastes the foreground image over the background image
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {'required': {'background_image': ('IMAGE',),
+                             'foreground_image': ('IMAGE',),
+                             'x_position': ('INT', {'default': 0, 'min': -10000, 'max': 10000}),
+                             'y_position': ('INT', {'default': 0, 'min': -10000, 'max': 10000})}}
+
+    RETURN_TYPES = ('IMAGE',)
+    RETURN_NAMES = ('image',)
+    FUNCTION = 'paste'
+    CATEGORY = 'Mikey/Image'
+
+    def tensor2pil(self, image):
+        image_np = np.clip(255. * image.cpu().numpy().squeeze(), 0, 255).astype(np.uint8)
+        if image_np.shape[0] == 4:  # Check for an alpha channel
+            return Image.fromarray(image_np.transpose(1, 2, 0), 'RGBA')
+        else:
+            return Image.fromarray(image_np.transpose(1, 2, 0), 'RGB')
+
+    def paste(self, background_image, foreground_image, x_position, y_position):
+        # Convert tensor to PIL image
+        background_image = tensor2pil(background_image)
+        foreground_image = tensor2pil(foreground_image)  # Using same function for now
+
+        # Check if the images have alpha channel and create mask
+        if foreground_image.mode != 'RGBA':
+            foreground_image = foreground_image.convert('RGBA')
+
+        # Separate the alpha channel and use it as mask
+        r, g, b, alpha = foreground_image.split()
+
+        # paste the foreground image onto the background image
+        background_image.paste(foreground_image, (x_position, y_position), mask=alpha)
+
+        return (pil2tensor(background_image),)
 
 class TextCombinations2:
     texts = ['text1', 'text2', 'text1 + text2']
@@ -3243,6 +3287,7 @@ NODE_CLASS_MAPPINGS = {
     'Seed String': IntegerAndString,
     'Image Caption': ImageCaption,
     'ImageBorder': ImageBorder,
+    'ImagePaste': ImagePaste,
     'TextCombinations': TextCombinations2,
     'TextCombinations3': TextCombinations3,
     'Text2InputOr3rdOption': Text2InputOr3rdOption,
@@ -3290,6 +3335,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Seed String': 'Seed String (Mikey)',
     'Image Caption': 'Image Caption (Mikey)',
     'ImageBorder': 'Image Border (Mikey)',
+    'ImagePaste': 'Image Paste (Mikey)',
     'TextCombinations': 'Text Combinations 2 (Mikey)',
     'TextCombinations3': 'Text Combinations 3 (Mikey)',
     'Text2InputOr3rdOption': 'Text 2 Inputs Or 3rd Option Instead (Mikey)',
