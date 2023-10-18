@@ -1137,14 +1137,19 @@ class SaveImagesMikey:
                 metadata.add_text("prompt", json.dumps(prompt, ensure_ascii=False))
             if extra_pnginfo is not None:
                 for x in extra_pnginfo:
-                    metadata.add_text(x, json.dumps(extra_pnginfo[x], ensure_ascii=False))
+                    for k, v in extra_pnginfo[x].items():
+                        metadata.add_text(str(k), str(v))
+                    #metadata.add_text(x, json.dumps(extra_pnginfo[x], ensure_ascii=False))
+                    #metadata.add_text(x, extra_pnginfo[x])
             if positive_prompt:
-                metadata.add_text("positive_prompt", json.dumps(positive_prompt, ensure_ascii=False))
+                #metadata.add_text("positive_prompt", json.dumps(positive_prompt, ensure_ascii=False))
+                metadata.add_text("positive_prompt", positive_prompt)
                 # replace any special characters with nothing and spaces with _
                 clean_pos = re.sub(r'[^a-zA-Z0-9 ]', '', positive_prompt)
                 pos_trunc = clean_pos.replace(' ', '_')[0:80]
             if negative_prompt:
-                metadata.add_text("negative_prompt", json.dumps(negative_prompt, ensure_ascii=False))
+                #metadata.add_text("negative_prompt", json.dumps(negative_prompt, ensure_ascii=False))
+                metadata.add_text("negative_prompt", negative_prompt)
             if filename_prefix != '':
                 metadata.add_text("filename_prefix", json.dumps(filename_prefix, ensure_ascii=False))
                 file = f"{filename}_{counter:05}_.png"
@@ -1295,9 +1300,13 @@ class SaveImagesMikeyML:
                 metadata.add_text("prompt", json.dumps(prompt, ensure_ascii=False))
             if extra_pnginfo is not None:
                 for x in extra_pnginfo:
-                    metadata.add_text(x, json.dumps(extra_pnginfo[x], ensure_ascii=False))
+                    for k, v in extra_pnginfo[x].items():
+                        metadata.add_text(str(k), str(v))
+                    #metadata.add_text(x, json.dumps(extra_pnginfo[x], ensure_ascii=False))
+                    #metadata.add_text(x, extra_pnginfo[x])
             if extra_metadata:
-                metadata.add_text("extra_metadata", json.dumps(extra_metadata, ensure_ascii=False))
+                #metadata.add_text("extra_metadata", json.dumps(extra_metadata, ensure_ascii=False))
+                metadata.add_text("extra_metadata", extra_metadata)
             # Check and get the next available counter
             counter = self._get_next_counter(full_output_folder, filename_base, counter)
             current_filename = filename_base.format(counter=f"{counter:05}")
@@ -1391,15 +1400,17 @@ class AddMetaData:
 class SearchAndReplace:
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": {"text": ("STRING", {"multiline": False, "placeholder": "Text to search and replace"}),},
+        return {"required": {"text": ("STRING", {"multiline": False, "placeholder": "Text to search and replace"}),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),},
                 "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},}
 
     RETURN_TYPES = ('STRING',)
     FUNCTION = "search_and_replace"
     CATEGORY = "Mikey/Utils"
 
-    def search_and_replace(self, text, prompt=None, extra_pnginfo=None):
+    def search_and_replace(self, text, seed, prompt=None, extra_pnginfo=None):
         result = search_and_replace(text, extra_pnginfo, prompt)
+        s = seed + 1
         return (result,)
 
 class SaveMetaData:
