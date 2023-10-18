@@ -1136,11 +1136,28 @@ class SaveImagesMikey:
             if prompt is not None:
                 metadata.add_text("prompt", json.dumps(prompt, ensure_ascii=False))
             if extra_pnginfo is not None:
-                for x in extra_pnginfo:
-                    for k, v in extra_pnginfo[x].items():
-                        metadata.add_text(str(k), str(v))
-                    #metadata.add_text(x, json.dumps(extra_pnginfo[x], ensure_ascii=False))
-                    #metadata.add_text(x, extra_pnginfo[x])
+                # check if extra_pnginfo is list of dicts
+                print(extra_pnginfo)
+                if isinstance(extra_pnginfo, list):
+                    print('extra_pnginfo is list')
+                    for x in extra_pnginfo:
+                        print(x)
+                        for k, v in x.items():
+                            if k == 'Workflow' or k == 'workflow':
+                                metadata.add_text(k, json.dumps(v, ensure_ascii=False))
+                            else:
+                                metadata.add_text(str(k), str(v))
+                elif isinstance(extra_pnginfo, dict):
+                    print('extra_pnginfo is dict')
+                    for k, v in extra_pnginfo.items():
+                        print(k, v)
+                        if k == 'Workflow' or k == 'workflow':
+                            metadata.add_text(k, json.dumps(v, ensure_ascii=False))
+                        else:
+                            metadata.add_text(str(k), str(v))
+                else:
+                    # not a list or dict
+                    metadata.add_text('extra_pnginfo', str(extra_pnginfo))
             if positive_prompt:
                 #metadata.add_text("positive_prompt", json.dumps(positive_prompt, ensure_ascii=False))
                 metadata.add_text("positive_prompt", positive_prompt)
@@ -1209,7 +1226,11 @@ class SaveImagesMikeyML:
             # use search and replace
             filename_texts[i] = search_and_replace(text, extra_pnginfo, prompt)
             # replace any special characters with nothing
-            filename_texts[i] = re.sub(r'[^a-zA-Z0-9 ]', '', filename_texts[i])
+            #filename_texts[i] = re.sub(r'[^a-zA-Z0-9 _-]', '', filename_texts[i])
+            # replace only characters that are not allowed in filenames
+            filename_texts[i] = re.sub(r'[<>:"/\\|?*]', '', filename_texts[i])
+            # remove non ascii characters
+            filename_texts[i] = filename_texts[i].encode('ascii', 'ignore').decode('ascii')
 
         # need to make sure the total filelength name is under 256 characters including the .png, separator, and counter
         # if the total length is over 256 characters, truncate the longest text to fit under 250 characters total length
@@ -1264,7 +1285,11 @@ class SaveImagesMikeyML:
             raise ValueError("Duplicate position numbers detected. Please ensure all position numbers are unique.")
         sub_directory = search_and_replace(sub_directory, extra_pnginfo, prompt)
         # strip special characters from sub_directory
-        sub_directory = re.sub(r'[^a-zA-Z0-9 _/\\]', '', sub_directory)
+        #sub_directory = re.sub(r'[^a-zA-Z0-9 _/\\]', '', sub_directory)
+        # replace only characters that are not allowed in filenames
+        sub_directory = re.sub(r'[<>:"|?*]', '', sub_directory)
+        # remove non ascii characters
+        sub_directory = sub_directory.encode('ascii', 'ignore').decode('ascii')
         full_output_folder = os.path.join(self.output_dir, sub_directory)
         os.makedirs(full_output_folder, exist_ok=True)
 
@@ -1299,11 +1324,23 @@ class SaveImagesMikeyML:
             if prompt is not None:
                 metadata.add_text("prompt", json.dumps(prompt, ensure_ascii=False))
             if extra_pnginfo is not None:
-                for x in extra_pnginfo:
-                    for k, v in extra_pnginfo[x].items():
-                        metadata.add_text(str(k), str(v))
-                    #metadata.add_text(x, json.dumps(extra_pnginfo[x], ensure_ascii=False))
-                    #metadata.add_text(x, extra_pnginfo[x])
+                # check if extra_pnginfo is list of dicts
+                if isinstance(extra_pnginfo, list):
+                    for x in extra_pnginfo:
+                        for k, v in x.items():
+                            if k == 'Workflow' or k == 'workflow':
+                                metadata.add_text(k, json.dumps(v, ensure_ascii=False))
+                            else:
+                                metadata.add_text(str(k), str(v))
+                elif isinstance(extra_pnginfo, dict):
+                        for k, v in extra_pnginfo.items():
+                            if k == 'Workflow' or k == 'workflow':
+                                metadata.add_text(k, json.dumps(v, ensure_ascii=False))
+                            else:
+                                metadata.add_text(str(k), str(v))
+                else:
+                    # not a list or dict
+                    metadata.add_text('extra_pnginfo', str(extra_pnginfo))
             if extra_metadata:
                 #metadata.add_text("extra_metadata", json.dumps(extra_metadata, ensure_ascii=False))
                 metadata.add_text("extra_metadata", extra_metadata)
