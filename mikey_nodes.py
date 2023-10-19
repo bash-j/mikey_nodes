@@ -1137,24 +1137,19 @@ class SaveImagesMikey:
                 metadata.add_text("prompt", json.dumps(prompt, ensure_ascii=False))
             if extra_pnginfo is not None:
                 # check if extra_pnginfo is list of dicts
-                print(extra_pnginfo)
                 if isinstance(extra_pnginfo, list):
-                    print('extra_pnginfo is list')
                     for x in extra_pnginfo:
-                        print(x)
                         for k, v in x.items():
                             if k == 'Workflow' or k == 'workflow':
                                 metadata.add_text(k, json.dumps(v, ensure_ascii=False))
                             else:
                                 metadata.add_text(str(k), str(v))
                 elif isinstance(extra_pnginfo, dict):
-                    print('extra_pnginfo is dict')
-                    for k, v in extra_pnginfo.items():
-                        print(k, v)
-                        if k == 'Workflow' or k == 'workflow':
-                            metadata.add_text(k, json.dumps(v, ensure_ascii=False))
-                        else:
-                            metadata.add_text(str(k), str(v))
+                        for k, v in extra_pnginfo.items():
+                            if k == 'Workflow' or k == 'workflow':
+                                metadata.add_text(k, json.dumps(v, ensure_ascii=False))
+                            else:
+                                metadata.add_text(str(k), str(v))
                 else:
                     # not a list or dict
                     metadata.add_text('extra_pnginfo', str(extra_pnginfo))
