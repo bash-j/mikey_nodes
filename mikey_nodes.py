@@ -1,6 +1,7 @@
 import datetime
 from fractions import Fraction
 import gc
+import hashlib
 import importlib.util
 from itertools import product
 import json
@@ -12,6 +13,7 @@ import re
 import sys
 from textwrap import wrap
 
+import requests
 import numpy as np
 from PIL import Image, ImageOps, ImageDraw, ImageFilter, ImageChops, ImageFont
 from PIL.PngImagePlugin import PngInfo
@@ -39,6 +41,49 @@ from nodes import LoraLoader, ConditioningAverage, common_ksampler, ImageScale, 
 import comfy.utils
 from comfy_extras.chainner_models import model_loading
 from comfy import model_management, model_base
+
+def calculate_file_hash(file_path):
+    # open the file in binary mode
+    with open(file_path, 'rb') as f:
+        # read the file in chunks to avoid loading the whole file into memory
+        chunk_size = 4096
+        hash_object = hashlib.sha256()
+        while True:
+            chunk = f.read(chunk_size)
+            if not chunk:
+                break
+            hash_object.update(chunk)
+    # return the hexadecimal representation of the hash
+    return hash_object.hexdigest()
+
+def get_cached_file_hashes():
+    # load the cached file hashes from the JSON file
+    cache_file_path = os.path.join(folder_paths.base_path, 'file_hashes.json')
+    if os.path.exists(cache_file_path):
+        with open(cache_file_path, 'r') as f:
+            return json.load(f)
+    else:
+        return {}
+
+def get_file_hash(file_path):
+    # check if the file hash is already cached
+    cached_file_hashes = get_cached_file_hashes()
+    file_name = os.path.basename(file_path)
+    if file_name in cached_file_hashes:
+        return cached_file_hashes[file_name]
+    else:
+        # calculate the file hash and cache it
+        file_hash = calculate_file_hash(file_path)[:10]
+        cache_file_hash(file_path, file_hash)
+        return file_hash
+
+def cache_file_hash(file_path, file_hash):
+    # update the cached file hashes dictionary and save to the JSON file
+    cache_file_path = os.path.join(folder_paths.base_path, 'file_hashes.json')
+    cached_file_hashes = get_cached_file_hashes()
+    cached_file_hashes[os.path.basename(file_path)] = file_hash
+    with open(cache_file_path, 'w') as f:
+        json.dump(cached_file_hashes, f)
 
 def find_latent_size(width: int, height: int, res: int = 1024) -> (int, int):
     best_w = 0
@@ -314,18 +359,22 @@ def search_and_replace(text, extra_pnginfo, prompt):
         # Find the id for this node name
         node_id = node_to_id_map.get(node_name)
         if node_id is None:
-            #print(f"No node with name {node_name} found.")
-            continue
+            print(f"No node with name {node_name} found.")
+            # check if user entered id instead of node name
+            if node_name in node_to_id_map.values():
+                node_id = node_name
+            else:
+                continue
 
         # Find the value of the specified widget in prompt JSON
         prompt_node = prompt.get(str(node_id))
         if prompt_node is None:
-            #print(f"No prompt data for node with id {node_id}.")
+            print(f"No prompt data for node with id {node_id}.")
             continue
 
         widget_value = prompt_node['inputs'].get(widget_name)
         if widget_value is None:
-            #print(f"No widget with name {widget_name} found for node {node_name}.")
+            print(f"No widget with name {widget_name} found for node {node_name}.")
             continue
 
         # Replace the pattern in the text
@@ -606,7 +655,8 @@ class RatioAdvanced:
                               "crop_h": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1}),
                               "use_preset_seed": (['true','false'], {"default": 'false'}),
                               "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                              }}
+                              },
+                "hidden": {"unique_id": "UNIQUE_ID", "extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"}}
 
     RETURN_TYPES = ('INT', 'INT', # latent
                     'INT', 'INT', # clip text encode
@@ -634,7 +684,7 @@ class RatioAdvanced:
     def calculate(self, preset, swap_axis, select_latent_ratio, custom_latent_w, custom_latent_h,
                   select_cte_ratio, cte_w, cte_h, cte_mult, cte_res, cte_fit_size,
                   select_target_ratio, target_w, target_h, target_mult, target_res, target_fit_size,
-                  crop_w, crop_h, use_preset_seed, seed):
+                  crop_w, crop_h, use_preset_seed, seed, unique_id=None, extra_pnginfo=None, prompt=None):
         # check if use_preset_seed is true
         if use_preset_seed == 'true' and len(self.ratio_presets) > 1:
             # seed is a randomly generated number that can be much larger than the number of presets
@@ -717,6 +767,14 @@ class RatioAdvanced:
         # check if target_fit_size not 0
         if target_fit_size != 0:
             target_w, target_h = self.fit(target_w, target_h, target_fit_size)
+        prompt.get(str(unique_id))['inputs']['output_latent_w'] = str(latent_width)
+        prompt.get(str(unique_id))['inputs']['output_latent_h'] = str(latent_height)
+        prompt.get(str(unique_id))['inputs']['output_cte_w'] = str(cte_w)
+        prompt.get(str(unique_id))['inputs']['output_cte_h'] = str(cte_h)
+        prompt.get(str(unique_id))['inputs']['output_target_w'] = str(target_w)
+        prompt.get(str(unique_id))['inputs']['output_target_h'] = str(target_h)
+        prompt.get(str(unique_id))['inputs']['output_crop_w'] = str(crop_w)
+        prompt.get(str(unique_id))['inputs']['output_crop_h'] = str(crop_h)
         return (latent_width, latent_height,
                 cte_w, cte_h,
                 target_w, target_h,
@@ -729,7 +787,8 @@ class PresetRatioSelector:
         return {"required": { "select_preset": (s.ratio_presets, {"default": "none"}),
                               "swap_axis": (['true','false'], {"default": 'false'}),
                               "use_preset_seed": (['true','false'], {"default": 'false'}),
-                              "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff})}}
+                              "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff})},
+                "hidden": {"unique_id": "UNIQUE_ID", "extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"}}
 
     RETURN_TYPES = ('INT', 'INT', # latent
                     'INT', 'INT', # clip text encode
@@ -742,7 +801,7 @@ class PresetRatioSelector:
     CATEGORY = 'Mikey/Utils'
     FUNCTION = 'calculate'
 
-    def calculate(self, select_preset, swap_axis, use_preset_seed, seed):
+    def calculate(self, select_preset, swap_axis, use_preset_seed, seed, unique_id=None, extra_pnginfo=None, prompt=None):
         # check if use_preset_seed is true
         if use_preset_seed == 'true' and len(self.ratio_presets) > 0:
             # seed is a randomly generated number that can be much larger than the number of presets
@@ -763,6 +822,14 @@ class PresetRatioSelector:
             cte_w, cte_h = cte_h, cte_w
             target_w, target_h = target_h, target_w
             crop_w, crop_h = crop_h, crop_w
+        prompt.get(str(unique_id))['inputs']['output_latent_w'] = str(latent_width)
+        prompt.get(str(unique_id))['inputs']['output_latent_h'] = str(latent_height)
+        prompt.get(str(unique_id))['inputs']['output_cte_w'] = str(cte_w)
+        prompt.get(str(unique_id))['inputs']['output_cte_h'] = str(cte_h)
+        prompt.get(str(unique_id))['inputs']['output_target_w'] = str(target_w)
+        prompt.get(str(unique_id))['inputs']['output_target_h'] = str(target_h)
+        prompt.get(str(unique_id))['inputs']['output_crop_w'] = str(crop_w)
+        prompt.get(str(unique_id))['inputs']['output_crop_h'] = str(crop_h)
         return (latent_width, latent_height,
                 cte_w, cte_h,
                 target_w, target_h,
@@ -1136,23 +1203,17 @@ class SaveImagesMikey:
             if prompt is not None:
                 metadata.add_text("prompt", json.dumps(prompt, ensure_ascii=False))
             if extra_pnginfo is not None:
-                # check if extra_pnginfo is list of dicts
-                if isinstance(extra_pnginfo, list):
-                    for x in extra_pnginfo:
-                        for k, v in x.items():
-                            if k == 'Workflow' or k == 'workflow':
-                                metadata.add_text(k, json.dumps(v, ensure_ascii=False))
-                            else:
-                                metadata.add_text(str(k), str(v))
-                elif isinstance(extra_pnginfo, dict):
-                        for k, v in extra_pnginfo.items():
-                            if k == 'Workflow' or k == 'workflow':
-                                metadata.add_text(k, json.dumps(v, ensure_ascii=False))
-                            else:
-                                metadata.add_text(str(k), str(v))
-                else:
-                    # not a list or dict
-                    metadata.add_text('extra_pnginfo', str(extra_pnginfo))
+                for x in extra_pnginfo:
+                    if x == 'parameters':
+                        # encode text as utf-8
+                        text = json.dumps(extra_pnginfo[x], ensure_ascii=False)#extra_pnginfo[x]#.encode('utf-8').decode('latin-1')
+                        metadata.add_text(x, text)
+                    elif x == 'workflow':
+                        metadata.add_text(x, json.dumps(extra_pnginfo[x]))
+                    elif x == 'prompt':
+                        metadata.add_text(x, json.dumps(extra_pnginfo[x]))
+                    else:
+                        metadata.add_text(x, json.dumps(extra_pnginfo[x], ensure_ascii=False))
             if positive_prompt:
                 #metadata.add_text("positive_prompt", json.dumps(positive_prompt, ensure_ascii=False))
                 metadata.add_text("positive_prompt", positive_prompt)
@@ -1164,7 +1225,7 @@ class SaveImagesMikey:
                 metadata.add_text("negative_prompt", negative_prompt)
             if filename_prefix != '':
                 metadata.add_text("filename_prefix", json.dumps(filename_prefix, ensure_ascii=False))
-                file = f"{filename}_{counter:05}_.png"
+                file = f"{filename[:75]}_{counter:05}_.png"
             else:
                 ts_str = datetime.datetime.now().strftime("%y%m%d%H%M%S")
                 file = f"{ts_str}_{pos_trunc}_{filename}_{counter:05}_.png"
@@ -1291,7 +1352,7 @@ class SaveImagesMikeyML:
         filename_texts = self._prepare_filename_texts(filename_text_1, filename_text_2, filename_text_3, extra_pnginfo, prompt)
 
         if timestamp == 'true':
-            ts = datetime.datetime.now().strftime("%y%m%d%H%M%S")
+            ts = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         else:
             ts = ''
 
@@ -1319,23 +1380,17 @@ class SaveImagesMikeyML:
             if prompt is not None:
                 metadata.add_text("prompt", json.dumps(prompt, ensure_ascii=False))
             if extra_pnginfo is not None:
-                # check if extra_pnginfo is list of dicts
-                if isinstance(extra_pnginfo, list):
-                    for x in extra_pnginfo:
-                        for k, v in x.items():
-                            if k == 'Workflow' or k == 'workflow':
-                                metadata.add_text(k, json.dumps(v, ensure_ascii=False))
-                            else:
-                                metadata.add_text(str(k), str(v))
-                elif isinstance(extra_pnginfo, dict):
-                        for k, v in extra_pnginfo.items():
-                            if k == 'Workflow' or k == 'workflow':
-                                metadata.add_text(k, json.dumps(v, ensure_ascii=False))
-                            else:
-                                metadata.add_text(str(k), str(v))
-                else:
-                    # not a list or dict
-                    metadata.add_text('extra_pnginfo', str(extra_pnginfo))
+                for x in extra_pnginfo:
+                    if x == 'parameters':
+                        # encode text as utf-8
+                        text = extra_pnginfo[x].encode('utf-8').decode('utf-8')
+                        metadata.add_text(x, text)
+                    elif x == 'workflow':
+                        metadata.add_text(x, json.dumps(extra_pnginfo[x]))
+                    elif x == 'prompt':
+                        metadata.add_text(x, json.dumps(extra_pnginfo[x]))
+                    else:
+                        metadata.add_text(x, json.dumps(extra_pnginfo[x], ensure_ascii=False))
             if extra_metadata:
                 #metadata.add_text("extra_metadata", json.dumps(extra_metadata, ensure_ascii=False))
                 metadata.add_text("extra_metadata", extra_metadata)
@@ -1484,6 +1539,7 @@ class FileNamePrefix:
     def INPUT_TYPES(s):
         return {"required": {'date': (['true','false'], {'default':'true'}),
                              'date_directory': (['true','false'], {'default':'true'}),
+                             'custom_directory': ('STRING', {'default': ''}),
                              'custom_text': ('STRING', {'default': ''})},
                 "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},}
 
@@ -1495,14 +1551,19 @@ class FileNamePrefix:
     def get_filename_prefix(self, date, date_directory, custom_directory, custom_text,
                             prompt=None, extra_pnginfo=None):
         filename_prefix = ''
+        if custom_directory:
+            custom_directory = search_and_replace(custom_directory, extra_pnginfo, prompt)
+            filename_prefix += custom_directory + '/'
         if date_directory == 'true':
             ts_str = datetime.datetime.now().strftime("%y%m%d")
             filename_prefix += ts_str + '/'
         if date == 'true':
-            ts_str = datetime.datetime.now().strftime("%y%m%d%H%M")
+            ts_str = datetime.datetime.now().strftime("%y%m%d%H%M%S")
             filename_prefix += ts_str
         if custom_text != '':
             custom_text = search_and_replace(custom_text, extra_pnginfo, prompt)
+            # remove invalid characters from filename
+            custom_text = re.sub(r'[<>:"/\\|?*]', '', custom_text)
             filename_prefix += '_' + custom_text
         return (filename_prefix,)
 
@@ -1711,7 +1772,7 @@ class PromptWithStyleV3:
                                               "2048","2048-90","4096", "4096-90"], {"default": "4x"}),
                              "base_model": ("MODEL",), "clip_base": ("CLIP",), "clip_refiner": ("CLIP",),
                              },
-                "hidden": {"extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"},
+                "hidden": {"unique_id": "UNIQUE_ID", "extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"},
         }
 
     RETURN_TYPES = ('MODEL','LATENT',
@@ -1773,7 +1834,7 @@ class PromptWithStyleV3:
 
     def start(self, base_model, clip_base, clip_refiner, positive_prompt, negative_prompt, ratio_selected, batch_size, seed,
               custom_size='false', fit_custom_size='false', custom_width=1024, custom_height=1024, target_mode='match',
-              extra_pnginfo=None, prompt=None):
+              unique_id=None, extra_pnginfo=None, prompt=None):
         if extra_pnginfo is None:
             extra_pnginfo = {'PromptWithStyle': {}}
 
@@ -1911,6 +1972,16 @@ class PromptWithStyleV3:
             sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base_neg, width, height, 0, 0, target_width, target_height, neg_prompt_, neg_style_)[0]
             refiner_pos_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width, refiner_height, pos_prompt_)[0]
             refiner_neg_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width, refiner_height, neg_prompt_)[0]
+            prompt.get(str(unique_id))['inputs']['output_positive_prompt'] = pos_prompt_
+            prompt.get(str(unique_id))['inputs']['output_negative_prompt'] = neg_prompt_
+            prompt.get(str(unique_id))['inputs']['output_latent_width'] = width
+            prompt.get(str(unique_id))['inputs']['output_latent_height'] = height
+            prompt.get(str(unique_id))['inputs']['output_target_width'] = target_width
+            prompt.get(str(unique_id))['inputs']['output_target_height'] = target_height
+            prompt.get(str(unique_id))['inputs']['output_refiner_width'] = refiner_width
+            prompt.get(str(unique_id))['inputs']['output_refiner_height'] = refiner_height
+            prompt.get(str(unique_id))['inputs']['output_crop_w'] = 0
+            prompt.get(str(unique_id))['inputs']['output_crop_h'] = 0
             return (base_model, {"samples":latent},
                     sdxl_pos_cond, sdxl_neg_cond,
                     refiner_pos_cond, refiner_neg_cond,
@@ -1964,6 +2035,16 @@ class PromptWithStyleV3:
             sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base_neg, width, height, 0, 0, target_width, target_height, neg_prompt_, neg_style_)[0]
             refiner_pos_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width, refiner_height, pos_prompt_)[0]
             refiner_neg_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width, refiner_height, neg_prompt_)[0]
+            prompt.get(str(unique_id))['inputs']['output_positive_prompt'] = pos_prompt_
+            prompt.get(str(unique_id))['inputs']['output_negative_prompt'] = neg_prompt_
+            prompt.get(str(unique_id))['inputs']['output_latent_width'] = width
+            prompt.get(str(unique_id))['inputs']['output_latent_height'] = height
+            prompt.get(str(unique_id))['inputs']['output_target_width'] = target_width
+            prompt.get(str(unique_id))['inputs']['output_target_height'] = target_height
+            prompt.get(str(unique_id))['inputs']['output_refiner_width'] = refiner_width
+            prompt.get(str(unique_id))['inputs']['output_refiner_height'] = refiner_height
+            prompt.get(str(unique_id))['inputs']['output_crop_w'] = 0
+            prompt.get(str(unique_id))['inputs']['output_crop_h'] = 0
             return (base_model, {"samples":latent},
                     sdxl_pos_cond, sdxl_neg_cond,
                     refiner_pos_cond, refiner_neg_cond,
@@ -1995,6 +2076,16 @@ class PromptWithStyleV3:
                 refiner_neg_cond = ConditioningAverage.addWeighted(self, refiner_neg_conds[i], refiner_neg_cond, 1 / weight)[0]
         # return
         extra_pnginfo['PromptWithStyle'] = prompt_with_style
+        prompt.get(str(unique_id))['inputs']['output_positive_prompt'] = pos_prompt_
+        prompt.get(str(unique_id))['inputs']['output_negative_prompt'] = neg_prompt_
+        prompt.get(str(unique_id))['inputs']['output_latent_width'] = width
+        prompt.get(str(unique_id))['inputs']['output_latent_height'] = height
+        prompt.get(str(unique_id))['inputs']['output_target_width'] = target_width
+        prompt.get(str(unique_id))['inputs']['output_target_height'] = target_height
+        prompt.get(str(unique_id))['inputs']['output_refiner_width'] = refiner_width
+        prompt.get(str(unique_id))['inputs']['output_refiner_height'] = refiner_height
+        prompt.get(str(unique_id))['inputs']['output_crop_w'] = 0
+        prompt.get(str(unique_id))['inputs']['output_crop_h'] = 0
         return (base_model, {"samples":latent},
                 sdxl_pos_cond, sdxl_neg_cond,
                 refiner_pos_cond, refiner_neg_cond,
@@ -3288,6 +3379,113 @@ class Text2InputOr3rdOption:
         else:
             return (text_a, text_b)
 
+class CheckpointLoaderSimpleMikey:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": { "ckpt_name": (folder_paths.get_filename_list("checkpoints"), ),
+                             },
+                "hidden": {"unique_id": "UNIQUE_ID", "extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"}}
+
+    RETURN_TYPES = ("MODEL", "CLIP", "VAE", "STRING", "STRING")
+    RETURN_NAMES = ("model", "clip", "vae", "ckpt_name", "ckpt_hash")
+    FUNCTION = "load_checkpoint"
+
+    CATEGORY = "Mikey/Loaders"
+
+    def load_checkpoint(self, ckpt_name, output_vae=True, output_clip=True, unique_id=None, extra_pnginfo=None, prompt=None):
+        ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
+        out = comfy.sd.load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=True, embedding_directory=folder_paths.get_folder_paths("embeddings"))
+        # get hash using python, there is no function in the comfy library
+        hash = get_file_hash(ckpt_path)[:10]
+        # just return the filename, not path
+        ckpt_name = os.path.basename(ckpt_name)
+        prompt.get(str(unique_id))['inputs']['output_ckpt_hash'] = hash
+        prompt.get(str(unique_id))['inputs']['output_ckpt_name'] = ckpt_name
+        return out[:3] + (ckpt_name, hash)
+
+class TextPreserve:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {'required': {'text': ('STRING', {'multiline': True, 'default': 'Input Text Here', 'dynamicPrompts': False}),
+                             'result_text': ('STRING', {'multiline': True, 'default': 'Result Text Here (will be replaced)'})},
+                "hidden": {"unique_id": "UNIQUE_ID", "extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"}}
+
+    RETURN_TYPES = ('STRING',)
+    RETURN_NAMES = ('text',)
+    FUNCTION = 'process'
+    OUTPUT_NODE = True
+
+    CATEGORY = 'Mikey/Text'
+
+    def process(self, text, result_text, unique_id=None, extra_pnginfo=None, prompt=None):
+        preserve_text = text
+        # search and replace
+        text = search_and_replace(text, extra_pnginfo, prompt)
+        # wildcard sytax is {like|this}
+        # select a random word from the | separated list
+        wc_re = re.compile(r'{([^}]+)}')
+        def repl(m):
+            return random.choice(m.group(1).split('|'))
+        for m in wc_re.finditer(text):
+            text = text.replace(m.group(0), repl(m))
+        prompt.get(str(unique_id))['inputs']['text'] = preserve_text
+        for i, node_dict in enumerate(extra_pnginfo['workflow']['nodes']):
+            if node_dict['id'] == int(unique_id):
+                node_dict['widgets_values'] = [preserve_text, text]
+                extra_pnginfo['workflow']['nodes'][i] = node_dict
+        prompt.get(str(unique_id))['inputs']['result_text'] = text
+        return (text,)
+
+class OoobaPrompt:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {'required': {'input_prompt': ('STRING', {'multiline': True, 'default': 'Prompt Text Here', 'dynamicPrompts': False}),
+                             'seed': ('INT', {'default': 0, 'min': 0, 'max': 0xffffffffffffffff}),},
+                "hidden": {"unique_id": "UNIQUE_ID", "extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"}}
+
+    RETURN_TYPES = ('STRING',)
+    RETURN_NAMES = ('text',)
+    FUNCTION = 'process'
+
+    CATEGORY = 'Mikey/AI'
+
+    def api_request(self, prompt, seed):
+        request = {
+            'user_input': prompt,
+            'max_new_tokens': 250,
+            'auto_max_new_tokens': False,
+            'max_tokens_second': 0,
+            'history': {'internal': [], 'visible': []},
+            'mode': 'instruct',
+             'regenerate': False,
+            '_continue': False,
+            'preset': 'None',
+            'seed': seed,
+        }
+        HOST = 'localhost:5000'
+        URI = f'http://{HOST}/api/v1/chat'
+        response = requests.post(URI, json=request)
+
+        if response.status_code == 200:
+            result = response.json()['results'][0]['history']['visible'][-1][1]
+            print(result)
+            return result
+        else:
+            return 'Error'
+
+    def process(self, input_prompt, seed, prompt=None, unique_id=None, extra_pnginfo=None):
+        # search and replace
+        input_prompt = search_and_replace(input_prompt, extra_pnginfo, prompt)
+        # wildcard sytax is {like|this}
+        # select a random word from the | separated list
+        wc_re = re.compile(r'{([^}]+)}')
+        def repl(m):
+            return random.choice(m.group(1).split('|'))
+        for m in wc_re.finditer(input_prompt):
+            input_prompt = input_prompt.replace(m.group(0), repl(m))
+        result = self.api_request(input_prompt, seed)
+        return (result,)
+
 NODE_CLASS_MAPPINGS = {
     'Wildcard Processor': WildcardProcessor,
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
@@ -3334,6 +3532,9 @@ NODE_CLASS_MAPPINGS = {
     'TextCombinations': TextCombinations2,
     'TextCombinations3': TextCombinations3,
     'Text2InputOr3rdOption': Text2InputOr3rdOption,
+    'Checkpoint Loader Simple Mikey': CheckpointLoaderSimpleMikey,
+    'TextPreserve': TextPreserve,
+    'OoobaPrompt': OoobaPrompt
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -3382,4 +3583,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'TextCombinations': 'Text Combinations 2 (Mikey)',
     'TextCombinations3': 'Text Combinations 3 (Mikey)',
     'Text2InputOr3rdOption': 'Text 2 Inputs Or 3rd Option Instead (Mikey)',
+    'Checkpoint Loader Simple Mikey': 'Checkpoint Loader Simple (Mikey)',
+    'TextPreserve': 'Text Preserve (Mikey)',
+    'OoobaPrompt': 'OoobaPrompt (Mikey)'
 }
