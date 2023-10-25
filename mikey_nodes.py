@@ -3456,11 +3456,120 @@ class OoobaPrompt:
             'max_new_tokens': 250,
             'auto_max_new_tokens': False,
             'max_tokens_second': 0,
-            'history': {'internal': [], 'visible': []},
+            'history': {
+                "internal": [
+                    [
+                        "<|BEGIN-VISIBLE-CHAT|>",
+                        "How can I help you today?"
+                    ],
+                    [
+                        "",
+                        ""
+                    ],
+                    [
+                        "insects",
+                        "Insect collection, scientific study, classification system, detailed sketch, in the style of entomologist George Osborn"
+                    ],
+                    [
+                        "eggs",
+                        "Egg clusters, intricate details, naturalist sketch, inspired by Maria Sibylla Merian"
+                    ],
+                    [
+                        "toaster oven",
+                        "Toasted bread, steam rising, breakfast scene, reminiscent of Winslow Homer's everyday life depictions"
+                    ],
+                    [
+                        "war",
+                        "Explosions, chaos, smoke, intense battlefield, in the style of Robert McClures"
+                    ],
+                    [
+                        "man made of water",
+                        "Water sculpture, fluid dynamics, abstract representation, in the style of Yves Klein"
+                    ],
+                    [
+                        "a friendly ogre",
+                        "A smiling sloth wearing a leather jacket, a cowboy hat and a kilt. The sloth is holding a quarterstaff and a big book. A shiny VW van with a cityscape painted on it and parked on grass."
+                    ],
+                    [
+                        "puppy",
+                        "A cute pug dog wearing a bowtie and reading a book. The pug is sitting in a vintage armchair. A monochrome painting in the style of Edvard Munch."
+                    ],
+                    [
+                        "apples",
+                        "Red apples stacked in a wooden crate. A farm scene. Reminiscent of the still lifes of Cezanne."
+                    ],
+                    [
+                        "working",
+                        "Close-up portrait of a woman with hair that looks like cotton candy. The woman is dressed as a fairy and is standing on clouds. Fantasy art."
+                    ],
+                    [
+                        "laptop",
+                        "An elegant woman sitting comfortably on a couch while typing on her laptop. A cozy living room. In the style of Norman Rockwell."
+                    ],
+                    [
+                        "a character that looks like an orange",
+                        "A character that looks like an orange sitting in a chair next to a cat that looks like a purple squirrel. A cute illustration."
+                    ]
+                ],
+                "visible": [
+                    [
+                        "",
+                        "How can I help you today?"
+                    ],
+                    [
+                        "",
+                        ""
+                    ],
+                    [
+                        "insects",
+                        "Insect collection, scientific study, classification system, detailed sketch, in the style of entomologist George Osborn"
+                    ],
+                    [
+                        "eggs",
+                        "Egg clusters, intricate details, naturalist sketch, inspired by Maria Sibylla Merian"
+                    ],
+                    [
+                        "toaster oven",
+                        "Toasted bread, steam rising, breakfast scene, reminiscent of Winslow Homer&#x27;s everyday life depictions"
+                    ],
+                    [
+                        "war",
+                        "Explosions, chaos, smoke, intense battlefield, in the style of Robert McClures"
+                    ],
+                    [
+                        "man made of water",
+                        "Water sculpture, fluid dynamics, abstract representation, in the style of Yves Klein"
+                    ],
+                    [
+                        "a friendly ogre",
+                        "A smiling sloth wearing a leather jacket, a cowboy hat and a kilt. The sloth is holding a quarterstaff and a big book. A shiny VW van with a cityscape painted on it and parked on grass."
+                    ],
+                    [
+                        "puppy",
+                        "A cute pug dog wearing a bowtie and reading a book. The pug is sitting in a vintage armchair. A monochrome painting in the style of Edvard Munch."
+                    ],
+                    [
+                        "apples",
+                        "Red apples stacked in a wooden crate. A farm scene. Reminiscent of the still lifes of Cezanne."
+                    ],
+                    [
+                        "working",
+                        "Close-up portrait of a woman with hair that looks like cotton candy. The woman is dressed as a fairy and is standing on clouds. Fantasy art."
+                    ],
+                    [
+                        "laptop",
+                        "An elegant woman sitting comfortably on a couch while typing on her laptop. A cozy living room. In the style of Norman Rockwell."
+                    ],
+                    [
+                        "a character that looks like an orange",
+                        "A character that looks like an orange sitting in a chair next to a cat that looks like a purple squirrel. A cute illustration."
+                    ]
+                ]
+            },
             'mode': 'instruct',
              'regenerate': False,
             '_continue': False,
-            'preset': 'None',
+            'preset': 'simple-1',
             'seed': seed,
         }
         HOST = 'localhost:5000'
@@ -3470,7 +3579,6 @@ class OoobaPrompt:
         if response.status_code == 200:
             result = response.json()['results'][0]['history']['visible'][-1][1]
             result = html.unescape(result)  # decode URL encoded special characters
-            print(result)
             return result
         else:
             return 'Error'
