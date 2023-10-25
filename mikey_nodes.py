@@ -13,6 +13,7 @@ import re
 import sys
 from textwrap import wrap
 
+import html
 import requests
 import numpy as np
 from PIL import Image, ImageOps, ImageDraw, ImageFilter, ImageChops, ImageFont
@@ -3468,6 +3469,7 @@ class OoobaPrompt:
 
         if response.status_code == 200:
             result = response.json()['results'][0]['history']['visible'][-1][1]
+            result = html.unescape(result)  # decode URL encoded special characters
             print(result)
             return result
         else:
