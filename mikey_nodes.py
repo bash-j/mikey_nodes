@@ -1188,9 +1188,14 @@ class SaveImagesMikey:
                 }
 
     RETURN_TYPES = ()
+    #RETURN_NAMES = ('filename',)
     FUNCTION = "save_images"
     OUTPUT_NODE = True
     CATEGORY = "Mikey/Image"
+
+    #@classmethod
+    #def IS_CHANGED(self, images):
+    #    return (np.nan,)
 
     def save_images(self, images, filename_prefix='', parameters='', prompt=None, extra_pnginfo=None, positive_prompt='', negative_prompt=''):
         filename_prefix = search_and_replace(filename_prefix, extra_pnginfo, prompt)
@@ -1202,12 +1207,12 @@ class SaveImagesMikey:
             metadata = PngInfo()
             pos_trunc = ''
             if prompt is not None:
-                metadata.add_text("prompt", json.dumps(prompt, ensure_ascii=False))
+                metadata.add_text("prompt", json.dumps(prompt))
             if extra_pnginfo is not None:
                 for x in extra_pnginfo:
                     if x == 'parameters':
                         # encode text as utf-8
-                        text = json.dumps(extra_pnginfo[x], ensure_ascii=False)#extra_pnginfo[x]#.encode('utf-8').decode('latin-1')
+                        text = extra_pnginfo[x].encode('utf-8').decode('utf-8')
                         metadata.add_text(x, text)
                     elif x == 'workflow':
                         metadata.add_text(x, json.dumps(extra_pnginfo[x]))
@@ -1225,8 +1230,9 @@ class SaveImagesMikey:
                 #metadata.add_text("negative_prompt", json.dumps(negative_prompt, ensure_ascii=False))
                 metadata.add_text("negative_prompt", negative_prompt)
             if filename_prefix != '':
-                metadata.add_text("filename_prefix", json.dumps(filename_prefix, ensure_ascii=False))
-                file = f"{filename[:75]}_{counter:05}_.png"
+                clean_filename_prefix = re.sub(r'[^a-zA-Z0-9 _-]', '', filename_prefix)
+                metadata.add_text("filename_prefix", json.dumps(clean_filename_prefix, ensure_ascii=False))
+                file = f"{clean_filename_prefix[:75]}_{counter:05}_.png"
             else:
                 ts_str = datetime.datetime.now().strftime("%y%m%d%H%M%S")
                 file = f"{ts_str}_{pos_trunc}_{filename}_{counter:05}_.png"
@@ -1379,7 +1385,7 @@ class SaveImagesMikeyML:
             img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
             metadata = PngInfo()
             if prompt is not None:
-                metadata.add_text("prompt", json.dumps(prompt, ensure_ascii=False))
+                metadata.add_text("prompt", json.dumps(prompt))
             if extra_pnginfo is not None:
                 for x in extra_pnginfo:
                     if x == 'parameters':
