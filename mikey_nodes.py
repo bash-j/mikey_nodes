@@ -3443,7 +3443,7 @@ class TextPreserve:
         prompt.get(str(unique_id))['inputs']['result_text'] = text
         return (text,)
 
-class OoobaPrompt:
+class OobaPrompt:
     @classmethod
     def INPUT_TYPES(s):
         return {'required': {'input_prompt': ('STRING', {'multiline': True, 'default': 'Prompt Text Here', 'dynamicPrompts': False}),
@@ -3457,20 +3457,19 @@ class OoobaPrompt:
     CATEGORY = 'Mikey/AI'
 
     def api_request(self, prompt, seed):
-        request = {
-            'user_input': prompt,
-            'max_new_tokens': 250,
-            'auto_max_new_tokens': False,
-            'max_tokens_second': 0,
-            'history': {
+        # check if json file in root comfy directory called oooba.json
+        if os.path.exists(os.path.join(folder_paths.base_path, 'ooba.json')):
+            history = json.load(open(os.path.join(folder_paths.base_path, 'ooba.json')))
+        else:
+            history = {
                 "internal": [
                     [
                         "<|BEGIN-VISIBLE-CHAT|>",
                         "How can I help you today?"
                     ],
                     [
-                        "",
-                        ""
+                        "I say something like 'cute puppies' and you respond with a single prompt which I can use as prompts for an AI txt2image model. Your response to cute puppies would be something like 'Sleeping puppies, soft blanket, gentle expressions, warm glow, reminiscent of the cozy work of Doug Hyde'. It describes the image, the style and even can mention an artist, art movement or movie that helps convey the overall look of the image to the model so it can best understand what it needs to generate.",
+                        "Sure thing! Let's begin. What is your first prompt?"
                     ],
                     [
                         "insects",
@@ -3571,7 +3570,13 @@ class OoobaPrompt:
                         "A character that looks like an orange sitting in a chair next to a cat that looks like a purple squirrel. A cute illustration."
                     ]
                 ]
-            },
+            }
+        request = {
+            'user_input': prompt,
+            'max_new_tokens': 250,
+            'auto_max_new_tokens': False,
+            'max_tokens_second': 0,
+            'history': history,
             'mode': 'instruct',
              'regenerate': False,
             '_continue': False,
@@ -3580,7 +3585,10 @@ class OoobaPrompt:
         }
         HOST = 'localhost:5000'
         URI = f'http://{HOST}/api/v1/chat'
-        response = requests.post(URI, json=request)
+        try:
+            response = requests.post(URI, json=request, timeout=10)
+        except requests.exceptions.ConnectionError:
+            raise Exception('Are you running oobabooga with API enabled?')
 
         if response.status_code == 200:
             result = response.json()['results'][0]['history']['visible'][-1][1]
@@ -3650,7 +3658,7 @@ NODE_CLASS_MAPPINGS = {
     'Text2InputOr3rdOption': Text2InputOr3rdOption,
     'Checkpoint Loader Simple Mikey': CheckpointLoaderSimpleMikey,
     'TextPreserve': TextPreserve,
-    'OoobaPrompt': OoobaPrompt
+    'OobaPrompt': OobaPrompt
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -3701,5 +3709,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Text2InputOr3rdOption': 'Text 2 Inputs Or 3rd Option Instead (Mikey)',
     'Checkpoint Loader Simple Mikey': 'Checkpoint Loader Simple (Mikey)',
     'TextPreserve': 'Text Preserve (Mikey)',
-    'OoobaPrompt': 'OoobaPrompt (Mikey)'
+    'OobaPrompt': 'OobaPrompt (Mikey)'
 }
