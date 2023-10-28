@@ -3447,6 +3447,8 @@ class OobaPrompt:
     @classmethod
     def INPUT_TYPES(s):
         return {'required': {'input_prompt': ('STRING', {'multiline': True, 'default': 'Prompt Text Here', 'dynamicPrompts': False}),
+                             'mode': (['prompt', 'style', 'custom'], {'default': 'prompt'}),
+                             'custom_history': ('STRING', {'multiline': False, 'default': 'path to history.json', 'dynamicPrompts': True}),
                              'seed': ('INT', {'default': 0, 'min': 0, 'max': 0xffffffffffffffff}),},
                 "hidden": {"unique_id": "UNIQUE_ID", "extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"}}
 
@@ -3456,64 +3458,53 @@ class OobaPrompt:
 
     CATEGORY = 'Mikey/AI'
 
-    def api_request(self, prompt, seed):
-        # check if json file in root comfy directory called oooba.json
-        if os.path.exists(os.path.join(folder_paths.base_path, 'ooba.json')):
-            history = json.load(open(os.path.join(folder_paths.base_path, 'ooba.json')))
-        else:
-            history = {
+    def history(self, mode, custom_history):
+        if mode == 'prompt':
+            return {
                 "internal": [
                     [
                         "<|BEGIN-VISIBLE-CHAT|>",
                         "How can I help you today?"
                     ],
                     [
-                        "I say something like 'cute puppies' and you respond with a single prompt which I can use as prompts for an AI txt2image model. Your response to cute puppies would be something like 'Sleeping puppies, soft blanket, gentle expressions, warm glow, reminiscent of the cozy work of Doug Hyde'. It describes the image, the style and even can mention an artist, art movement or movie that helps convey the overall look of the image to the model so it can best understand what it needs to generate.",
+                        "I say something like 'blonde woman' and you respond with a single prompt which I can use as prompts for an AI txt2image model. Your response to blonde woman would be something like 'Blonde woman wearing a patterned orange, white, and blue sundress, smiling, on a sunny day with a blue sky, surrounded by buildings and palm trees'. It describes the image with lots of details so the AI model will understand what it needs to generate.",
                         "Sure thing! Let's begin. What is your first prompt?"
                     ],
                     [
-                        "insects",
-                        "Insect collection, scientific study, classification system, detailed sketch, in the style of entomologist George Osborn"
+                        "futuristic man",
+                        "Man with short black hair in a highly detailed silver and black mechanical exoskeleton suit, holding a futuristic rifle, standing in a futuristic city with tall buildings and flying cars, with a futuristic cityscape in the background."
                     ],
                     [
-                        "eggs",
-                        "Egg clusters, intricate details, naturalist sketch, inspired by Maria Sibylla Merian"
+                        "a black cat",
+                        "A black cat with green eyes, sitting on a wooden table, there is a vase of flowers on the table, the cat is looking at the flowers. Sunlight is streaming in through a window, illuminating the cat and the flowers."
                     ],
                     [
                         "toaster oven",
-                        "Toasted bread, steam rising, breakfast scene, reminiscent of Winslow Homer's everyday life depictions"
+                        "A toaster oven with a slice of bread inside, the bread is toasted and has a smiley face burned into it. The toaster oven is sitting on a kitchen counter next to a coffee maker and a microwave. The kitchen counter is made of granite and has a sink in it. There is a window above the sink with a view of a city skyline."
                     ],
                     [
                         "war",
-                        "Explosions, chaos, smoke, intense battlefield, in the style of Robert McClures"
+                        "A soldier wearing a gas mask and a helmet, holding a rifle, standing in a trench. There is barbed wire in front of the trench. The sky is dark and cloudy. There is a tank in the background."
                     ],
                     [
-                        "man made of water",
-                        "Water sculpture, fluid dynamics, abstract representation, in the style of Yves Klein"
+                        "portrait of a man",
+                        "A portrait of a man in his 30s with short brown hair and a beard. He is wearing a suit and tie. He is smiling. He is standing in front of a brick wall with graffiti on it."
                     ],
                     [
                         "a friendly ogre",
-                        "A smiling sloth wearing a leather jacket, a cowboy hat and a kilt. The sloth is holding a quarterstaff and a big book. A shiny VW van with a cityscape painted on it and parked on grass."
+                        "A friendly ogre with green skin and a big smile. He is wearing a red and white striped shirt and blue overalls. He is holding a pitchfork. He is standing in a field of flowers. There is a rainbow in the sky."
                     ],
                     [
                         "puppy",
-                        "A cute pug dog wearing a bowtie and reading a book. The pug is sitting in a vintage armchair. A monochrome painting in the style of Edvard Munch."
+                        "A cute pug dog wearing a bowtie and reading a book. The book is titled 'How to be a good dog'. The dog is sitting on a couch in a living room. There is a fireplace in the background."
                     ],
                     [
                         "apples",
-                        "Red apples stacked in a wooden crate. A farm scene. Reminiscent of the still lifes of Cezanne."
+                        "Red apples stacked in a wooden crate. The crate is sitting on a wooden table in the kitchen inside a rustic farm house with old appliances. The walls are decorated with family photos. There is a window in the background with a view of the farm."
                     ],
                     [
-                        "working",
-                        "Close-up portrait of a woman with hair that looks like cotton candy. The woman is dressed as a fairy and is standing on clouds. Fantasy art."
-                    ],
-                    [
-                        "laptop",
-                        "An elegant woman sitting comfortably on a couch while typing on her laptop. A cozy living room. In the style of Norman Rockwell."
-                    ],
-                    [
-                        "a character that looks like an orange",
-                        "A character that looks like an orange sitting in a chair next to a cat that looks like a purple squirrel. A cute illustration."
+                        "working woman",
+                        "A woman is working on a laptop computer. She is wearing a white shirt and black pants. She is sitting at a desk in a modern office with trendy furniture. She has a cup of coffee on the desk next to her."
                     ]
                 ],
                 "visible": [
@@ -3521,56 +3512,82 @@ class OobaPrompt:
                         "",
                         "How can I help you today?"
                     ],
+                ]
+            }
+        elif mode == 'style':
+            return {
+                "internal": [
                     [
-                        "",
-                        ""
+                        "<|BEGIN-VISIBLE-CHAT|>",
+                        "How can I help you today?"
                     ],
                     [
-                        "insects",
-                        "Insect collection, scientific study, classification system, detailed sketch, in the style of entomologist George Osborn"
+                        "I say something like 'painting' and you respond with a single prompt which I can use as prompts for an AI txt2image model. Your response to painting would be something like 'Impressionistic, landscape, vivid colors, loose brushstrokes, beauty of nature. Inspired by Claude Monet'. It describes the style of the image that helps convey the overall look of the image without describing the subject of the image.",
+                        "Sure thing! Let's begin. What is your first prompt?"
                     ],
                     [
-                        "eggs",
-                        "Egg clusters, intricate details, naturalist sketch, inspired by Maria Sibylla Merian"
+                        "painting",
+                        "Realism, oil painting, dark shadows, bright highlights, focus on capturing light and texture. Inspired by Caravaggio's chiaroscuro technique"
                     ],
                     [
-                        "toaster oven",
-                        "Toasted bread, steam rising, breakfast scene, reminiscent of Winslow Homer&#x27;s everyday life depictions"
+                        "Impressionism",
+                        "Impressionism. Soft brushstrokes, fleeting moments of light and color. Landscapes, flowers, people in motion"
                     ],
                     [
-                        "war",
-                        "Explosions, chaos, smoke, intense battlefield, in the style of Robert McClures"
+                        "painting",
+                        "Impressionistic, landscape, vivid colors, loose brushstrokes, beauty of nature. Inspired by Claude Monet"
                     ],
                     [
-                        "man made of water",
+                        "abstract",
+                        "Abstract expressionism, bold brushstrokes, vivid colors"
+                    ],
+                    [
+                        "water",
                         "Water sculpture, fluid dynamics, abstract representation, in the style of Yves Klein"
                     ],
                     [
-                        "a friendly ogre",
-                        "A smiling sloth wearing a leather jacket, a cowboy hat and a kilt. The sloth is holding a quarterstaff and a big book. A shiny VW van with a cityscape painted on it and parked on grass."
+                        "Surrealism",
+                        "dreamlike imagery, unexpected juxtapositions, symbolic elements. features distorted or unusual forms, animals or objects transformed into otherworldly shapes"
                     ],
                     [
-                        "puppy",
-                        "A cute pug dog wearing a bowtie and reading a book. The pug is sitting in a vintage armchair. A monochrome painting in the style of Edvard Munch."
+                        "Art Nouveau",
+                        "Art Nouveau style, flowing lines, organic shapes, muted color palette, decorative elements, floral motifs."
                     ],
                     [
-                        "apples",
-                        "Red apples stacked in a wooden crate. A farm scene. Reminiscent of the still lifes of Cezanne."
+                        "photo",
+                        "Black and white photograph, shot using a large format camera with slow shutter speeds. Grainy texture and high contrast. Influenced by the works of Edward Hopper."
                     ],
                     [
-                        "working",
-                        "Close-up portrait of a woman with hair that looks like cotton candy. The woman is dressed as a fairy and is standing on clouds. Fantasy art."
+                        "photo",
+                        "Color photograph, Soft focus, muted colors, romantic atmosphere, in the style of Edward Weston."
                     ],
                     [
-                        "laptop",
-                        "An elegant woman sitting comfortably on a couch while typing on her laptop. A cozy living room. In the style of Norman Rockwell."
+                        "film",
+                        "Long shot, film still, cinematic lighting, gritty realism, inspired by the works of Gus Van Sant"
                     ],
                     [
-                        "a character that looks like an orange",
-                        "A character that looks like an orange sitting in a chair next to a cat that looks like a purple squirrel. A cute illustration."
+                        "movie",
+                        "Filmic storytelling, dreamlike imagery, surreal elements, poetic narratives, reminiscent of the works of David Lynch."
+                    ]
+                ],
+                "visible": [
+                    [
+                        "",
+                        "How can I help you today?"
                     ]
                 ]
             }
+        elif mode == 'custom':
+            # open json file that is in the custom_history path
+            try:
+                history = json.load(open(custom_history))
+                return history
+            except:
+                raise Exception('Error loading custom history file')
+
+    def api_request(self, prompt, seed, mode, custom_history):
+        # check if json file in root comfy directory called oooba.json
+        history = self.history(mode, custom_history)
         request = {
             'user_input': prompt,
             'max_new_tokens': 250,
@@ -3597,7 +3614,7 @@ class OobaPrompt:
         else:
             return 'Error'
 
-    def process(self, input_prompt, seed, prompt=None, unique_id=None, extra_pnginfo=None):
+    def process(self, input_prompt, mode, custom_history, seed, prompt=None, unique_id=None, extra_pnginfo=None):
         # search and replace
         input_prompt = search_and_replace(input_prompt, extra_pnginfo, prompt)
         # wildcard sytax is {like|this}
@@ -3607,7 +3624,7 @@ class OobaPrompt:
             return random.choice(m.group(1).split('|'))
         for m in wc_re.finditer(input_prompt):
             input_prompt = input_prompt.replace(m.group(0), repl(m))
-        result = self.api_request(input_prompt, seed)
+        result = self.api_request(input_prompt, seed, mode, custom_history)
         return (result,)
 
 NODE_CLASS_MAPPINGS = {
