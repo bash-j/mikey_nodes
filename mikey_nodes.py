@@ -3447,7 +3447,7 @@ class OobaPrompt:
     @classmethod
     def INPUT_TYPES(s):
         return {'required': {'input_prompt': ('STRING', {'multiline': True, 'default': 'Prompt Text Here', 'dynamicPrompts': False}),
-                             'mode': (['prompt', 'style', 'custom'], {'default': 'prompt'}),
+                             'mode': (['prompt', 'style', 'descriptor', 'custom'], {'default': 'prompt'}),
                              'custom_history': ('STRING', {'multiline': False, 'default': 'path to history.json', 'dynamicPrompts': True}),
                              'seed': ('INT', {'default': 0, 'min': 0, 'max': 0xffffffffffffffff}),},
                 "hidden": {"unique_id": "UNIQUE_ID", "extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"}}
@@ -3522,7 +3522,7 @@ class OobaPrompt:
                         "How can I help you today?"
                     ],
                     [
-                        "I say something like 'painting' and you respond with a single prompt which I can use as prompts for an AI txt2image model. Your response to painting would be something like 'Impressionistic, landscape, vivid colors, loose brushstrokes, beauty of nature. Inspired by Claude Monet'. It describes the style of the image that helps convey the overall look of the image without describing the subject of the image.",
+                        "I say something like 'painting' and you respond with a single prompt which I can use as prompts for an AI txt2image model. Your response to painting would be something like 'Impressionistic, landscape, vivid colors, loose brushstrokes, beauty of nature. Inspired by Claude Monet'. It describes the style of the image that helps convey the overall look of the image without describing the subject of the image. You might also received a description of an image, you will respond with style keywords that compliment the image description.",
                         "Sure thing! Let's begin. What is your first prompt?"
                     ],
                     [
@@ -3538,12 +3538,20 @@ class OobaPrompt:
                         "Impressionistic, landscape, vivid colors, loose brushstrokes, beauty of nature. Inspired by Claude Monet"
                     ],
                     [
+                        "The 2015 Audi R8 Spyder sports car is parked on a driveway outside a luxurious mansion. The car is painted in a metallic grey color. The top is down revealing the sleek interior. The car is surrounded by lush greenery and palm trees.",
+                        "Landscape photography, vibrant saturation, dramatic shadows, golden hour lighting, inspired by the work of Peter Lik."
+                    ],
+                    [
                         "abstract",
                         "Abstract expressionism, bold brushstrokes, vivid colors"
                     ],
                     [
                         "water",
                         "Water sculpture, fluid dynamics, abstract representation, in the style of Yves Klein"
+                    ],
+                    [
+                        "A MacBook Pro open and displaying an email message. The keyboard is illuminated and the trackpad is being used. A man is sitting at a wooden desk in a cozy home office. There is a plant in the corner and sunlight coming in from a nearby window.",
+                        "Still life, muted colors, soft lighting, in the style of Henri Matisse"
                     ],
                     [
                         "Surrealism",
@@ -3577,6 +3585,69 @@ class OobaPrompt:
                     ]
                 ]
             }
+        elif mode == 'descriptor':
+            return {
+                "internal": [
+                    [
+                        "<|BEGIN-VISIBLE-CHAT|>",
+                        "How can I help you today?"
+                    ],
+                    [
+                        "I say something like 'color' and you respond with a single prompt which I can use to build a prompt for an AI txt2image model. Your response to color would be something like 'red'. It is a very short description to add dynamic variety to the prompt.",
+                        "Sure thing! Let's begin. What is your first prompt?"
+                    ],
+                    [
+                        "color",
+                        "burnt sienna"
+                    ],
+                    [
+                        "hair color",
+                        "platinum blonde"
+                    ],
+                    [
+                        "metal",
+                        "rusted iron"
+                    ],
+                    [
+                        "weather",
+                        "bright and sunny"
+                    ],
+                    [
+                        "time of day",
+                        "crack of dawn"
+                    ],
+                    [
+                        "man",
+                        "tall and slender man with wide shoulders in his 30s"
+                    ],
+                    [
+                        "ethnicity",
+                        "Vietnamese"
+                    ],
+                    [
+                        "occupation",
+                        "Heavy diesel mechanic"
+                    ],
+                    [
+                        "art style",
+                        "crystal cubism"
+                    ],
+                    [
+                        "artist",
+                        "Camille Pissarro"
+                    ],
+                    [
+                        "movie director",
+                        "David Lynch"
+                    ]
+                ],
+                "visible": [
+                    [
+                        "",
+                        "How can I help you today?"
+                    ]
+                ]
+            }
         elif mode == 'custom':
             # open json file that is in the custom_history path
             try:
@@ -3588,6 +3659,25 @@ class OobaPrompt:
     def api_request(self, prompt, seed, mode, custom_history):
         # check if json file in root comfy directory called oooba.json
         history = self.history(mode, custom_history)
+        if mode == 'descriptor':
+            # use seed to add a bit more randomness to the prompt
+            spice = ['a', 'the', 'this', 'that',
+                     'an exotic', 'an interesting', 'a colorful', 'a vibrant', 'get creative!', 'think outside the box!', 'a rare',
+                     'a standard', 'a typical', 'a common', 'a normal', 'a regular', 'a usual', 'an ordinary',
+                     'a unique', 'a one of a kind', 'a special', 'a distinctive', 'a peculiar', 'a remarkable', 'a noteworthy',
+                     'popular in the victorian era', 'popular in the 1920s', 'popular in the 1950s', 'popular in the 1980s',
+                     'popular in the 1990s', 'popular in the 2000s', 'popular in the 2010s', 'popular in the 2020s',
+                     'popular in asia', 'popular in europe', 'popular in north america', 'popular in south america',
+                     'popular in africa', 'popular in australia', 'popular in the middle east', 'popular in the pacific islands',
+                     'popular with young people', 'popular with the elderly', 'trending on social media', 'popular on tiktok',
+                     'trending on pinterest', 'popular on instagram', 'popular on facebook', 'popular on twitter',
+                     'popular on reddit', 'popular on youtube', 'popular on tumblr', 'popular on snapchat',
+                     'popular on linkedin', 'popular on twitch', 'popular on discord',
+                     'unusual example of', 'a classic', 'an underrated', 'an innovative','a historical', 'a modern', 'a contemporary',
+                     'a futuristic', 'a traditional', 'an eco-friendly', 'a controversial', 'a political', 'a religious',
+                     'a spiritual', 'a philosophical', 'a scientific']
+            random.seed(seed)
+            prompt = f'{random.choice(spice)} {prompt}'
         request = {
             'user_input': prompt,
             'max_new_tokens': 250,
@@ -3597,7 +3687,7 @@ class OobaPrompt:
             'mode': 'instruct',
              'regenerate': False,
             '_continue': False,
-            'preset': 'simple-1',
+            'preset': 'StarChat',
             'seed': seed,
         }
         HOST = 'localhost:5000'
@@ -3625,6 +3715,7 @@ class OobaPrompt:
         for m in wc_re.finditer(input_prompt):
             input_prompt = input_prompt.replace(m.group(0), repl(m))
         result = self.api_request(input_prompt, seed, mode, custom_history)
+        prompt.get(str(unique_id))['inputs']['output_text'] = result
         return (result,)
 
 NODE_CLASS_MAPPINGS = {
