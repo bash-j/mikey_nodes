@@ -1377,10 +1377,13 @@ class SaveImagesMikeyML:
 
         # Get initial counter value
         files = os.listdir(full_output_folder)
-        counter = self._get_initial_counter(files, full_output_folder, counter_type, filename_separator, counter_pos, filename_texts)
+        if counter_type != 'none':
+            counter = self._get_initial_counter(files, full_output_folder, counter_type, filename_separator, counter_pos, filename_texts)
+        else:
+            counter = 0
 
         results = list()
-        for image in images:
+        for ix, image in enumerate(images):
             i = 255. * image.cpu().numpy()
             img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8))
             metadata = PngInfo()
@@ -1402,20 +1405,25 @@ class SaveImagesMikeyML:
                 #metadata.add_text("extra_metadata", json.dumps(extra_metadata, ensure_ascii=False))
                 metadata.add_text("extra_metadata", extra_metadata)
             # Check and get the next available counter
-            counter = self._get_next_counter(full_output_folder, filename_base, counter)
-            current_filename = filename_base.format(counter=f"{counter:05}")
+            if counter_type != 'none':
+                counter = self._get_next_counter(full_output_folder, filename_base, counter)
+                current_filename = filename_base.format(counter=f"{counter:05}")
+            else:
+                current_filename = filename_base
             if timestamp_type == 'save_time' and timestamp == 'true':
                 current_timestamp = datetime.datetime.now().strftime("%y%m%d%H%M%S")
                 current_filename = current_filename.replace(ts, current_timestamp)
                 ts = current_timestamp
-
+            if ix > 0 and counter_type == 'none':
+                current_filename = current_filename.replace(ts, ts + f'_{ix:02}')
             img.save(os.path.join(full_output_folder, f"{current_filename}.png"), pnginfo=metadata, compress_level=4)
             results.append({
                 "filename": f"{current_filename}.png",
                 "subfolder": sub_directory,
                 "type": self.type
             })
-            counter += 1
+            if counter_type != 'none':
+                counter += 1
 
         return {"ui": {"images": results}}
 
@@ -2682,6 +2690,19 @@ def ai_upscale(tile, base_model, vae, seed, positive_cond_base, negative_cond_ba
     tile = vaedecoder.decode(vae, tile)[0]
     return tile
 
+def ai_upscale_adv(tile, base_model, vae, seed, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, start_step=11, end_step=20):
+    """Upscale a tile using the AI model."""
+    vaedecoder = VAEDecode()
+    vaeencoder = VAEEncode()
+    tile = pil2tensor(tile)
+    #print('Tile Complexity:', complexity)
+    encoded_tile = vaeencoder.encode(vae, tile)[0]
+    tile = common_ksampler(base_model, seed, end_step, cfg, sampler_name, scheduler,
+                           positive_cond_base, negative_cond_base, encoded_tile,
+                           start_step=start_step, force_full_denoise=True)[0]
+    tile = vaedecoder.decode(vae, tile)[0]
+    return tile
+
 def run_tiler(enlarged_img, base_model, vae, seed, positive_cond_base, negative_cond_base, denoise=0.25, use_complexity_score='true'):
     # Split the enlarged image into overlapping tiles
     tiles = split_image(enlarged_img)
@@ -2689,6 +2710,21 @@ def run_tiler(enlarged_img, base_model, vae, seed, positive_cond_base, negative_
     # Resample each tile using the AI model
     start_step = int(20 - (20 * denoise))
     resampled_tiles = [(coords, ai_upscale(tile, base_model, vae, seed, positive_cond_base, negative_cond_base, start_step, use_complexity_score)) for coords, tile in tiles]
+
+    # Stitch the tiles to get the final upscaled image
+    result = stitch_images(enlarged_img.size, resampled_tiles)
+
+    return result
+
+def run_tiler_for_steps(enlarged_img, base_model, vae, seed, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, steps=20, denoise=0.25):
+    # Split the enlarged image into overlapping tiles
+    tiles = split_image(enlarged_img)
+
+    # Resample each tile using the AI model
+    start_step = int(steps - (steps * denoise))
+    end_step = steps
+    resampled_tiles = [(coords, ai_upscale_adv(tile, base_model, vae, seed, cfg, sampler_name, scheduler,
+                                               positive_cond_base, negative_cond_base, start_step, end_step)) for coords, tile in tiles]
 
     # Stitch the tiles to get the final upscaled image
     result = stitch_images(enlarged_img.size, resampled_tiles)
@@ -2759,7 +2795,7 @@ class MikeySamplerTiledAdvanced:
                              "positive_cond_refiner": ("CONDITIONING",), "negative_cond_refiner": ("CONDITIONING",),
                              "model_name": (folder_paths.get_filename_list("upscale_models"), ),
                              "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                             "denoise_image": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.01}),
+                             "denoise_image": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
                              "steps": ("INT", {"default": 30, "min": 1, "max": 1000}),
                              "smooth_step": ("INT", {"default": 1, "min": -1, "max": 100}),
                              "cfg": ("FLOAT", {"default": 6.5, "min": 0.0, "max": 1000.0, "step": 0.1}),
@@ -2837,6 +2873,68 @@ class MikeySamplerTiledAdvanced:
         else:
             tiled_image = run_tiler(img, refiner_model, vae, seed, positive_cond_refiner, negative_cond_refiner, tiler_denoise, use_complexity_score)
         return (tiled_image, img)
+
+class MikeySamplerTiledAdvancedBaseOnly:
+    # there is no step skipped, so no smooth steps are required
+    # also no refiner for this
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"base_model": ("MODEL",),
+                             "samples": ("LATENT",), "vae": ("VAE",),
+                             "positive_cond_base": ("CONDITIONING",), "negative_cond_base": ("CONDITIONING",),
+                             "model_name": (folder_paths.get_filename_list("upscale_models"), ),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                             "denoise_image": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                             "steps": ("INT", {"default": 30, "min": 1, "max": 1000}),
+                             "cfg": ("FLOAT", {"default": 6.5, "min": 0.0, "max": 1000.0, "step": 0.1}),
+                             "sampler_name": (comfy.samplers.KSampler.SAMPLERS, ),
+                             "scheduler": (comfy.samplers.KSampler.SCHEDULERS, ),
+                             "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1}),
+                             "tiler_denoise": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.05}),},
+                "optional": {"image_optional": ("IMAGE",),}}
+
+    RETURN_TYPES = ('IMAGE', )
+    RETURN_NAMES = ('output_image', )
+    FUNCTION = 'run'
+    CATEGORY = 'Mikey/Sampling'
+
+    def phase_one(self, base_model, samples, positive_cond_base, negative_cond_base,
+                    upscale_by, model_name, seed, vae, denoise_image,
+                    steps, cfg, sampler_name, scheduler):
+            image_scaler = ImageScale()
+            vaedecoder = VAEDecode()
+            uml = UpscaleModelLoader()
+            upscale_model = uml.load_model(model_name)[0]
+            iuwm = ImageUpscaleWithModel()
+            # step 1 run base model
+            start_step = int(steps - (steps * denoise_image))
+            #print(f'base model start_step: {start_step}, last_step: {last_step}')
+            sample1 = common_ksampler(base_model, seed, steps, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, samples,
+                                    start_step=start_step, last_step=steps, force_full_denoise=False)[0]
+            # step 3 upscale image using a simple AI image upscaler
+            pixels = vaedecoder.decode(vae, sample1)[0]
+            org_width, org_height = pixels.shape[2], pixels.shape[1]
+            img = iuwm.upscale(upscale_model, image=pixels)[0]
+            upscaled_width, upscaled_height = int(org_width * upscale_by // 8 * 8), int(org_height * upscale_by // 8 * 8)
+            img = image_scaler.upscale(img, 'nearest-exact', upscaled_width, upscaled_height, 'center')[0]
+            return img, upscaled_width, upscaled_height
+
+    def run(self, seed, base_model, vae, samples, positive_cond_base, negative_cond_base,
+            model_name, upscale_by=2.0, tiler_denoise=0.4,
+            upscale_method='normal', denoise_image=1.0, steps=30, cfg=6.5,
+            sampler_name='dpmpp_sde_gpu', scheduler='karras', image_optional=None):
+        # if image not none replace samples with decoded image
+        if image_optional is not None:
+            vaeencoder = VAEEncode()
+            samples = vaeencoder.encode(vae, image_optional)[0]
+        # phase 1: run base, refiner, then upscaler model
+        img, upscaled_width, upscaled_height = self.phase_one(base_model, samples, positive_cond_base, negative_cond_base,
+                                                              upscale_by, model_name, seed, vae, denoise_image,
+                                                              steps, cfg, sampler_name, scheduler)
+        # phase 2: run tiler
+        img = tensor2pil(img)
+        tiled_image = run_tiler_for_steps(img, base_model, vae, seed, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, steps, tiler_denoise)
+        return (tiled_image, )
 
 class MikeySamplerTiledBaseOnly(MikeySamplerTiled):
     @classmethod
@@ -3447,7 +3545,7 @@ class OobaPrompt:
     @classmethod
     def INPUT_TYPES(s):
         return {'required': {'input_prompt': ('STRING', {'multiline': True, 'default': 'Prompt Text Here', 'dynamicPrompts': False}),
-                             'mode': (['prompt', 'style', 'descriptor', 'custom'], {'default': 'prompt'}),
+                             'mode': (['prompt', 'style', 'descriptor', 'character', 'custom'], {'default': 'prompt'}),
                              'custom_history': ('STRING', {'multiline': False, 'default': 'path to history.json', 'dynamicPrompts': True}),
                              'seed': ('INT', {'default': 0, 'min': 0, 'max': 0xffffffffffffffff}),},
                 "hidden": {"unique_id": "UNIQUE_ID", "extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"}}
@@ -3648,6 +3746,45 @@ class OobaPrompt:
                     ]
                 ]
             }
+        elif mode == 'character':
+            return {
+                "internal": [
+                    [
+                        "<|BEGIN-VISIBLE-CHAT|>",
+                        "How can I help you today?"
+                    ],
+                    [
+                        "When a user requests a character description, generate a detailed description of the character as you would expect from the writer George R. R. Martin. The description should be a suitable prompt based on the description that encapsulates the character's key visual elements for image creation using a txt2img model.",
+                        "Sure thing! Let's begin. What is your first prompt?"
+                    ],
+                    [
+                        "jolly cartoon octopus",
+                        "A cartoon octopus with a jolly demeanor in a sunshiny yellow and orange color scheme, wearing a small top hat and a polka-dotted bow tie, surrounded by intricate sculptures made of its own ink, in the midst of an undersea setting that hints at festivity and mirth.",
+                    ],
+                    [
+                        "a dapper young lady spy who wears suits",
+                        "A young 1920s lady spy with chestnut hair in a bob cut, piercing emerald eyes, wearing a tailored charcoal pinstripe suit with a white shirt and a silk tie, holding a silver cigarette case, exuding an aura of mystery and sophistication against a backdrop of Parisian nightlife.",
+                    ],
+                    [
+                        "a charming robot",
+                        "A charming robot with a sleek chrome body, art deco design elements, azure glowing eyes, and a gentle smile. Wearing a holographic bow tie and a vest painted to look like a dapper suit, engaged in performing a magic trick with a playful, inquisitive expression in an urban park setting.",
+                    ],
+                    [
+                        "cartoon ant",
+                        "A cartoon ant with a vibrant blue exoskeleton, oversized round eyes full of curiosity, wearing a leaf-green vest and a tiny fabric cap. Exhibiting an expression of wonder and excitement, amidst a backdrop of an underground ant colony bustling with activity.",
+                    ],
+                    [
+                        "a cyberpunk gnome",
+                        "A cyberpunk gnome with pale skin and cybernetic jade eyes, wearing a long tattered coat with circuitry patches and a sleek metallic pointed helmet. Surrounded by holographic screens and neon lights in a dim, cluttered workshop filled with futuristic gadgets and data screens.",
+                    ]
+                ],
+                "visible": [
+                    [
+                        "",
+                        "How can I help you today?"
+                    ]
+                ]
+            }
         elif mode == 'custom':
             # open json file that is in the custom_history path
             try:
@@ -3659,6 +3796,8 @@ class OobaPrompt:
     def api_request(self, prompt, seed, mode, custom_history):
         # check if json file in root comfy directory called oooba.json
         history = self.history(mode, custom_history)
+        if mode == 'prompt':
+            prompt = f'{prompt}, describe in detail.'
         if mode == 'descriptor':
             # use seed to add a bit more randomness to the prompt
             spice = ['a', 'the', 'this', 'that',
@@ -3693,7 +3832,7 @@ class OobaPrompt:
         HOST = 'localhost:5000'
         URI = f'http://{HOST}/api/v1/chat'
         try:
-            response = requests.post(URI, json=request, timeout=10)
+            response = requests.post(URI, json=request, timeout=20)
         except requests.exceptions.ConnectionError:
             raise Exception('Are you running oobabooga with API enabled?')
 
@@ -3795,6 +3934,7 @@ NODE_CLASS_MAPPINGS = {
     'Style Conditioner Base Only': StyleConditionerBaseOnly,
     'Mikey Sampler': MikeySampler,
     'MikeySamplerTiledAdvanced': MikeySamplerTiledAdvanced,
+    'MikeySamplerTiledAdvancedBaseOnly': MikeySamplerTiledAdvancedBaseOnly,
     'Mikey Sampler Base Only': MikeySamplerBaseOnly,
     'Mikey Sampler Base Only Advanced': MikeySamplerBaseOnlyAdvanced,
     'Mikey Sampler Tiled': MikeySamplerTiled,
@@ -3850,6 +3990,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Mikey Sampler Base Only Advanced': 'Mikey Sampler Base Only Advanced',
     'Mikey Sampler Tiled': 'Mikey Sampler Tiled',
     'MikeySamplerTiledAdvanced': 'Mikey Sampler Tiled Advanced',
+    'MikeySamplerTiledAdvancedBaseOnly': 'Mikey Sampler Tiled Advanced Base Only',
     'Mikey Sampler Tiled Base Only': 'Mikey Sampler Tiled Base Only',
     'AddMetaData': 'AddMetaData (Mikey)',
     'SaveMetaData': 'SaveMetaData (Mikey)',
