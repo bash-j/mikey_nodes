@@ -2919,6 +2919,21 @@ class MikeySamplerTiledAdvancedBaseOnly:
             img = image_scaler.upscale(img, 'nearest-exact', upscaled_width, upscaled_height, 'center')[0]
             return img, upscaled_width, upscaled_height
 
+    def upscale_image(self, samples, vae,
+                    upscale_by, model_name):
+            image_scaler = ImageScale()
+            vaedecoder = VAEDecode()
+            uml = UpscaleModelLoader()
+            upscale_model = uml.load_model(model_name)[0]
+            iuwm = ImageUpscaleWithModel()
+            # step 3 upscale image using a simple AI image upscaler
+            pixels = vaedecoder.decode(vae, samples)[0]
+            org_width, org_height = pixels.shape[2], pixels.shape[1]
+            img = iuwm.upscale(upscale_model, image=pixels)[0]
+            upscaled_width, upscaled_height = int(org_width * upscale_by // 8 * 8), int(org_height * upscale_by // 8 * 8)
+            img = image_scaler.upscale(img, 'nearest-exact', upscaled_width, upscaled_height, 'center')[0]
+            return img, upscaled_width, upscaled_height
+
     def run(self, seed, base_model, vae, samples, positive_cond_base, negative_cond_base,
             model_name, upscale_by=2.0, tiler_denoise=0.4,
             upscale_method='normal', denoise_image=1.0, steps=30, cfg=6.5,
@@ -2927,12 +2942,16 @@ class MikeySamplerTiledAdvancedBaseOnly:
         if image_optional is not None:
             vaeencoder = VAEEncode()
             samples = vaeencoder.encode(vae, image_optional)[0]
-        # phase 1: run base, refiner, then upscaler model
-        img, upscaled_width, upscaled_height = self.phase_one(base_model, samples, positive_cond_base, negative_cond_base,
-                                                              upscale_by, model_name, seed, vae, denoise_image,
-                                                              steps, cfg, sampler_name, scheduler)
+        if denoise_image > 0:
+            # phase 1: run base, refiner, then upscaler model
+            img, upscaled_width, upscaled_height = self.phase_one(base_model, samples, positive_cond_base, negative_cond_base,
+                                                                upscale_by, model_name, seed, vae, denoise_image,
+                                                                steps, cfg, sampler_name, scheduler)
+            img = tensor2pil(img)
+        else:
+            img = self.upscale_image(samples, vae, upscale_by, model_name)
+            img = tensor2pil(img)
         # phase 2: run tiler
-        img = tensor2pil(img)
         tiled_image = run_tiler_for_steps(img, base_model, vae, seed, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, steps, tiler_denoise)
         return (tiled_image, )
 
@@ -3904,6 +3923,117 @@ class WildcardOobaPrompt:
         prompt.get(str(unique_id))['inputs']['output_text'] = input_prompt
         return (input_prompt,)
 
+class EvalFloats:
+    # takes two float inputs and a text widget the user can type a formula for values a and b to calculate
+    # then returns the result as the output
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {'required': {'a': ('FLOAT', {'default': 0.0}),
+                             'b': ('FLOAT', {'default': 0.0}),
+                             'formula': ('STRING', {'multiline': False, 'default': 'a + b'})}}
+
+    RETURN_TYPES = ('FLOAT',)
+    RETURN_NAMES = ('result_float','result_int','result_str')
+    FUNCTION = 'process'
+    CATEGORY = 'Mikey/Math'
+
+    def process(self, a, b, formula):
+        # eval formula
+        formula = formula.replace('a', str(a))
+        formula = formula.replace('b', str(b))
+        result = eval(formula)
+        return (result, int(result), str(result))
+
+class ImageOverlay:
+    # overlay foreground image on top of background image
+    # automatically fill or crop foreground image to match background image size
+    # automatically resize foreground image to match background image size
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {'required': {'background_image': ('IMAGE', {'default': None}),
+                             'foreground_image': ('IMAGE', {'default': None}),
+                             'opacity': ('FLOAT', {'default': 1.0, 'min': 0.0, 'max': 1.0, 'step': 0.01})}}
+
+    RETURN_TYPES = ('IMAGE',)
+    RETURN_NAMES = ('result_img',)
+    FUNCTION = 'overlay'
+    CATEGORY = 'Mikey/Image'
+
+    def overlay(self, background_image, foreground_image, opacity):
+        background_image = tensor2pil(background_image)
+        foreground_image = tensor2pil(foreground_image)
+        # Ensure images are in RGB mode and resize foreground to match background
+        background_image = background_image.convert('RGB')
+        foreground_image = foreground_image.resize(background_image.size).convert('RGB')
+
+        # Convert images to NumPy arrays
+        bg_array = np.array(background_image, dtype=np.float32) / 255
+        fg_array = np.array(foreground_image, dtype=np.float32) / 255
+
+        # Calculate Overlay blend
+        mask = bg_array < 0.5
+        overlay = np.zeros_like(bg_array)
+        overlay[mask] = 2 * bg_array[mask] * fg_array[mask]
+        overlay[~mask] = 1 - 2 * (1 - bg_array[~mask]) * (1 - fg_array[~mask])
+
+        # Apply opacity
+        result = (1 - opacity) * bg_array + opacity * overlay
+
+        # Convert the result to uint8 and back to an Image
+        result_img = Image.fromarray((result * 255).astype(np.uint8))
+        result_img = pil2tensor(result_img)
+        return result_img,
+
+class CinematicLook:
+    # combine function from ImageOverlay and HALDClut to create a cinematic look
+    @classmethod
+    def INPUT_TYPES(s):
+        s.haldclut_files = read_cluts()
+        s.file_names = [os.path.basename(f) for f in s.haldclut_files]
+        return {'required': {'image': ('IMAGE', {'default': None}),
+                             'look': (['modern','retro','black and white'],)}}
+
+    RETURN_TYPES = ('IMAGE',)
+    RETURN_NAMES = ('result_img',)
+    FUNCTION = 'cinematic_look'
+    CATEGORY = 'Mikey/Image'
+
+    def apply_haldclut(self, image, hald_clut, gamma_correction):
+        hald_img = Image.open(self.haldclut_files[self.file_names.index(hald_clut)])
+        img = tensor2pil(image)
+        if gamma_correction == 'True':
+            corrected_img = gamma_correction_pil(img, 1.0/2.2)
+        else:
+            corrected_img = img
+        filtered_image = apply_hald_clut(hald_img, corrected_img).convert("RGB")
+        return filtered_image
+
+    def cinematic_look(self, image, look):
+        # load haldclut
+        if look == 'modern':
+            image = self.apply_haldclut(image, 'modern.png', 'False')
+        elif look == 'retro':
+            image = self.apply_haldclut(image, 'retro.png', 'False')
+        elif look == 'black and white':
+            image = self.apply_haldclut(image, 'bw.png', 'False')
+        p = os.path.dirname(os.path.realpath(__file__))
+        if look == 'black and white':
+            noise_img = os.path.join(p, 'noise_bw.png')
+        else:
+            noise_img = os.path.join(p, 'noise.png')
+        # load noise image
+        noise = Image.open(noise_img)
+        IO = ImageOverlay()
+        image = pil2tensor(image)
+        noise = pil2tensor(noise)
+        if look == 'modern':
+            image = IO.overlay(image, noise, 0.5)[0]
+        if look == 'retro':
+            image = IO.overlay(image, noise, 0.9)[0]
+        if look == 'black and white':
+            image = IO.overlay(image, noise, 0.7)[0]
+        return (image,)
+
 NODE_CLASS_MAPPINGS = {
     'Wildcard Processor': WildcardProcessor,
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
@@ -3954,7 +4084,10 @@ NODE_CLASS_MAPPINGS = {
     'Checkpoint Loader Simple Mikey': CheckpointLoaderSimpleMikey,
     'TextPreserve': TextPreserve,
     'OobaPrompt': OobaPrompt,
-    'WildcardOobaPrompt': WildcardOobaPrompt
+    'WildcardOobaPrompt': WildcardOobaPrompt,
+    'EvalFloats': EvalFloats,
+    'ImageOverlay': ImageOverlay,
+    'CinematicLook': CinematicLook
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -4007,5 +4140,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Checkpoint Loader Simple Mikey': 'Checkpoint Loader Simple (Mikey)',
     'TextPreserve': 'Text Preserve (Mikey)',
     'OobaPrompt': 'OobaPrompt (Mikey)',
-    'WildcardOobaPrompt': 'Wildcard OobaPrompt (Mikey)'
+    'WildcardOobaPrompt': 'Wildcard OobaPrompt (Mikey)',
+    'EvalFloats': 'Eval Floats (Mikey)',
+    'ImageOverlay': 'Image Overlay (Mikey)',
+    'CinematicLook': 'Cinematic Look (Mikey)'
 }
