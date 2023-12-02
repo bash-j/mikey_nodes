@@ -3964,22 +3964,26 @@ class ImageOverlay:
         foreground_image = tensor2pil(foreground_image)
         # Ensure images are in RGB mode and resize foreground to match background
         background_image = background_image.convert('RGB')
-        foreground_image = foreground_image.resize(background_image.size).convert('RGB')
+        foreground_image = foreground_image.convert('RGB')
+        # create a cropped image from the foreground image with the same dimensions as the background image
+        cropped_fg = Image.new('RGB', (background_image.size[0], background_image.size[1]))
+        # paste the foreground image into the center of the cropped image
+        cropped_fg.paste(foreground_image, (int((background_image.size[0] - foreground_image.size[0]) / 2), int((background_image.size[1] - foreground_image.size[1]) / 2)))
 
         # Convert images to NumPy arrays
         bg_array = np.array(background_image, dtype=np.float32) / 255
-        fg_array = np.array(foreground_image, dtype=np.float32) / 255
+        fg_array = np.array(cropped_fg, dtype=np.float32) / 255
 
-        # Calculate Overlay blend
+        ## Calculate Overlay blend
         mask = bg_array < 0.5
         overlay = np.zeros_like(bg_array)
         overlay[mask] = 2 * bg_array[mask] * fg_array[mask]
         overlay[~mask] = 1 - 2 * (1 - bg_array[~mask]) * (1 - fg_array[~mask])
 
-        # Apply opacity
+        ## Apply opacity
         result = (1 - opacity) * bg_array + opacity * overlay
 
-        # Convert the result to uint8 and back to an Image
+        ## Convert the result to uint8 and back to an Image
         result_img = Image.fromarray((result * 255).astype(np.uint8))
         result_img = pil2tensor(result_img)
         return result_img,
@@ -3991,7 +3995,7 @@ class CinematicLook:
         s.haldclut_files = read_cluts()
         s.file_names = [os.path.basename(f) for f in s.haldclut_files]
         return {'required': {'image': ('IMAGE', {'default': None}),
-                             'look': (['modern','retro','black and white'],)}}
+                             'look': (['modern','retro','clipped','broadcast','black and white','black and white - warm'],)}}
 
     RETURN_TYPES = ('IMAGE',)
     RETURN_NAMES = ('result_img',)
@@ -4014,10 +4018,16 @@ class CinematicLook:
             image = self.apply_haldclut(image, 'modern.png', 'False')
         elif look == 'retro':
             image = self.apply_haldclut(image, 'retro.png', 'False')
+        elif look == 'clipped':
+            image = self.apply_haldclut(image, 'clipped.png', 'False')
+        elif look == 'broadcast':
+            image = self.apply_haldclut(image, 'broadcast.png', 'False')
         elif look == 'black and white':
             image = self.apply_haldclut(image, 'bw.png', 'False')
+        elif look == 'black and white - warm':
+            image = self.apply_haldclut(image, 'bw_warm.png', 'False')
         p = os.path.dirname(os.path.realpath(__file__))
-        if look == 'black and white':
+        if look in ['black and white',]:
             noise_img = os.path.join(p, 'noise_bw.png')
         else:
             noise_img = os.path.join(p, 'noise.png')
@@ -4027,11 +4037,17 @@ class CinematicLook:
         image = pil2tensor(image)
         noise = pil2tensor(noise)
         if look == 'modern':
-            image = IO.overlay(image, noise, 0.5)[0]
+            image = IO.overlay(image, noise, 0.3)[0]
         if look == 'retro':
-            image = IO.overlay(image, noise, 0.9)[0]
+            image = IO.overlay(image, noise, 0.4)[0]
+        if look == 'clipped':
+            image = IO.overlay(image, noise, 0.25)[0]
+        if look == 'broadcast':
+            image = IO.overlay(image, noise, 0.3)[0]
         if look == 'black and white':
-            image = IO.overlay(image, noise, 0.7)[0]
+            image = IO.overlay(image, noise, 0.25)[0]
+        if look == 'black and white - warm':
+            image = IO.overlay(image, noise, 0.25)[0]
         return (image,)
 
 NODE_CLASS_MAPPINGS = {
