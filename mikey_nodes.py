@@ -1596,6 +1596,39 @@ class FileNamePrefix:
             filename_prefix += '_' + custom_text
         return (filename_prefix,)
 
+class FileNamePrefixDateDirFirst:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {'date': (['true','false'], {'default':'true'}),
+                             'date_directory': (['true','false'], {'default':'true'}),
+                             'custom_directory': ('STRING', {'default': ''}),
+                             'custom_text': ('STRING', {'default': ''})},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},}
+
+    RETURN_TYPES = ('STRING',)
+    RETURN_NAMES = ('filename_prefix',)
+    FUNCTION = 'get_filename_prefix'
+    CATEGORY = 'Mikey/Meta'
+
+    def get_filename_prefix(self, date, date_directory, custom_directory, custom_text,
+                            prompt=None, extra_pnginfo=None):
+        filename_prefix = ''
+        if date_directory == 'true':
+            ts_str = datetime.datetime.now().strftime("%y%m%d")
+            filename_prefix += ts_str + '/'
+        if custom_directory:
+            custom_directory = search_and_replace(custom_directory, extra_pnginfo, prompt)
+            filename_prefix += custom_directory + '/'
+        if date == 'true':
+            ts_str = datetime.datetime.now().strftime("%y%m%d%H%M%S")
+            filename_prefix += ts_str
+        if custom_text != '':
+            custom_text = search_and_replace(custom_text, extra_pnginfo, prompt)
+            # remove invalid characters from filename
+            custom_text = re.sub(r'[<>:"/\\|?*]', '', custom_text)
+            filename_prefix += '_' + custom_text
+        return (filename_prefix,)
+
 class PromptWithStyle:
     @classmethod
     def INPUT_TYPES(s):
@@ -4390,6 +4423,7 @@ NODE_CLASS_MAPPINGS = {
     'SaveMetaData': SaveMetaData,
     'SearchAndReplace': SearchAndReplace,
     'FileNamePrefix': FileNamePrefix,
+    'FileNamePrefixDateDirFirst': FileNamePrefixDateDirFirst,
     'HaldCLUT ': HaldCLUT,
     'Seed String': IntegerAndString,
     'Image Caption': ImageCaption,
@@ -4447,6 +4481,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'SaveMetaData': 'SaveMetaData (Mikey)',
     'SearchAndReplace': 'Search And Replace (Mikey)',
     'FileNamePrefix': 'File Name Prefix (Mikey)',
+    'FileNamePrefixDateDirFirst': 'File Name Prefix Date Dir First (Mikey)',
     'HaldCLUT': 'HaldCLUT (Mikey)',
     'Seed String': 'Seed String (Mikey)',
     'Image Caption': 'Image Caption (Mikey)',
