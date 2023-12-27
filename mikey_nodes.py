@@ -1119,6 +1119,32 @@ class BatchLoadImages:
         #print(f'Loaded {len(images)} images')
         return (images,)
 
+class LoadImgFromDirectoryBasedOnIndex:
+    # given a directory of images, and the seed number
+    # return the image which is the index of the list of files in the directory
+    # use mod to wrap around the list of files because the seed can be a huge number
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"image_directory": ("STRING", {"multiline": False, "placeholder": "Image Directory"}),
+                             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff})}}
+
+    RETURN_TYPES = ('IMAGE',)
+    FUNCTION = 'load'
+    CATEGORY = 'Mikey/Image'
+
+    def load(self, image_directory, seed):
+        if not os.path.exists(image_directory):
+            raise Exception(f"Image directory {image_directory} does not exist")
+
+        files = [os.path.join(image_directory, f)
+                 for f in os.listdir(image_directory)
+                 if os.path.isfile(os.path.join(image_directory, f)) and f.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"))]
+        # wrap around the list of files
+        offset = seed % len(files)
+        img = Image.open(files[offset])
+        img = pil2tensor(img)
+        return (img, )
+
 class BatchLoadTxtPrompts:
     # reads all the txt files in a directory and returns a list of strings
     # which can be used as prompts to generate images
@@ -4404,6 +4430,7 @@ NODE_CLASS_MAPPINGS = {
     'Batch Crop Image': BatchCropImage,
     'Batch Crop Resize Inplace': BatchCropResizeInplace,
     'Batch Load Images': BatchLoadImages,
+    'Load Image Based on Number': LoadImgFromDirectoryBasedOnIndex,
     'Prompt With Style': PromptWithStyle,
     'Prompt With Style V2': PromptWithStyleV2,
     'Prompt With Style V3': PromptWithStyleV3,
@@ -4462,6 +4489,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Batch Resize Image for SDXL': 'Batch Resize Image for SDXL (Mikey)',
     'Batch Crop Resize Inplace': 'Batch Crop Resize Inplace (Mikey)',
     'Batch Load Images': 'Batch Load Images (Mikey)',
+    'Load Image Based on Number': 'Load Image Based on Number (Mikey)',
     'Prompt With Style V3': 'Prompt With Style (Mikey)',
     'LoraSyntaxProcessor': 'Lora Syntax Processor (Mikey)',
     'WildcardAndLoraSyntaxProcessor': 'Wildcard And Lora Syntax Processor (Mikey)',
