@@ -1128,7 +1128,8 @@ class LoadImgFromDirectoryBasedOnIndex:
         return {"required": {"image_directory": ("STRING", {"multiline": False, "placeholder": "Image Directory"}),
                              "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff})}}
 
-    RETURN_TYPES = ('IMAGE',)
+    RETURN_TYPES = ('IMAGE', 'STRING')
+    RETURN_NAMES = ('image', 'filename')
     FUNCTION = 'load'
     CATEGORY = 'Mikey/Image'
 
@@ -1139,11 +1140,14 @@ class LoadImgFromDirectoryBasedOnIndex:
         files = [os.path.join(image_directory, f)
                  for f in os.listdir(image_directory)
                  if os.path.isfile(os.path.join(image_directory, f)) and f.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"))]
+        # sort files by name
+        files.sort()
         # wrap around the list of files
         offset = seed % len(files)
+        filename = files[offset].split('/')[-1]
         img = Image.open(files[offset])
         img = pil2tensor(img)
-        return (img, )
+        return (img, filename)
 
 class BatchLoadTxtPrompts:
     # reads all the txt files in a directory and returns a list of strings
