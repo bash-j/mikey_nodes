@@ -3649,6 +3649,41 @@ class TextPreserve:
         prompt.get(str(unique_id))['inputs']['result_text'] = text
         return (text,)
 
+class TextConcat:
+    # takes 5 text inputs and concatenates them into a single string
+    # with an option for delimiter
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {'required': {'delimiter': ('STRING', {'default': ' '})},
+                'optional': {'text1': ('STRING', {'default': ''}),
+                             'text2': ('STRING', {'default': ''}),
+                             'text3': ('STRING', {'default': ''}),
+                             'text4': ('STRING', {'default': ''}),
+                             'text5': ('STRING', {'default': ''}),
+                             }}
+
+    RETURN_TYPES = ('STRING',)
+    FUNCTION = 'concat'
+    CATEGORY = 'Mikey/Text'
+
+    def concat(self, delimiter, text1, text2, text3, text4, text5):
+        # search and replace
+        # concatenate the strings
+        # text values might be none
+        texts = []
+        if text1:
+            texts.append(text1)
+        if text2:
+            texts.append(text2)
+        if text3:
+            texts.append(text3)
+        if text4:
+            texts.append(text4)
+        if text5:
+            texts.append(text5)
+        text = delimiter.join(texts)
+        return (text,)
+
 class OobaPrompt:
     @classmethod
     def INPUT_TYPES(s):
@@ -4266,6 +4301,7 @@ class LMStudioPrompt:
 
     def process(self, input_prompt, mode, custom_history, server_address, server_port, seed, prompt=None, unique_id=None, extra_pnginfo=None):
         # search and replace
+        input_prompt = find_and_replace_wildcards(input_prompt, seed, debug=True)
         input_prompt = search_and_replace(input_prompt, extra_pnginfo, prompt)
         # wildcard sytax is {like|this}
         # select a random word from the | separated list
@@ -4465,6 +4501,7 @@ NODE_CLASS_MAPPINGS = {
     'Text2InputOr3rdOption': Text2InputOr3rdOption,
     'Checkpoint Loader Simple Mikey': CheckpointLoaderSimpleMikey,
     'TextPreserve': TextPreserve,
+    'TextConcat': TextConcat,
     'OobaPrompt': OobaPrompt,
     'WildcardOobaPrompt': WildcardOobaPrompt,
     'LMStudioPrompt': LMStudioPrompt,
@@ -4524,6 +4561,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Text2InputOr3rdOption': 'Text 2 Inputs Or 3rd Option Instead (Mikey)',
     'Checkpoint Loader Simple Mikey': 'Checkpoint Loader Simple (Mikey)',
     'TextPreserve': 'Text Preserve (Mikey)',
+    'TextConcat': 'Text Concat (Mikey)',
     'OobaPrompt': 'OobaPrompt (Mikey)',
     'WildcardOobaPrompt': 'Wildcard OobaPrompt (Mikey)',
     'LMStudioPrompt': 'LM Studio Prompt (Mikey)',
