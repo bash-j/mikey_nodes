@@ -3,6 +3,7 @@
 This repository contains custom nodes for ComfyUI.
 
 ## Prompt With Style
+
 ![image](https://github.com/bash-j/mikey_nodes/assets/3195567/0048faa8-5f46-4d92-8e38-e7ff603007da)
 
 Example workflow in the prompt_with_styles.json file and mikey_node_workflow.json
@@ -19,7 +20,9 @@ There is a V1 and V2 Prompt with Style node with different functionality, style 
 
 ### Wildcards
 
-Wildcards are supported using the `__word__` syntax. Folder location is comfyui/wildcards You can select more than 1 line from the wildcard by using the syntax `[2$$__wildcard__]` for 2 lines in this example. You can also add a word to search for in the wildcard file e.g. `__wildcard|word__`
+Wildcards are supported using the `__word__` syntax. Folder location is comfyui/wildcards You can select more than 1 line from the wildcard by using the syntax `2$$__wildcard__` for 2 lines in this example. You can also add a word to search for in the wildcard file e.g. `__wildcard|word__`
+
+You can also make sure it selects the same line from the wildcard by using the `__!wildcard__` syntax, not the ! before the filename. You can also use `__+wildcard__` `__-wildcard__` and `__*wildcard__` to use the offset + 1 or - 1, or randomly select a different line.
 
 ### Styles
 
@@ -53,6 +56,7 @@ The format needs to look like the following example:
 ```
 
 ## Mikey Sampler and Mikey Sampler Base Only
+
 ![image](https://github.com/bash-j/mikey_nodes/assets/3195567/beb24edb-4655-4d00-933a-e3fa2304aef2)
 ![image](https://github.com/bash-j/mikey_nodes/assets/3195567/d7e1e34a-c84b-47c7-8c6c-cf2278cd1570)
 
@@ -60,7 +64,7 @@ Example workflow: mikey_node_workflow.json
 
 This is a sampler node as a companion to the Prompt with Style node, to allow for very straightforward image generation with SDXL.
 
-The node uses a base -> refiner -> upscale with model -> base to produce the final image. It has an inbuilt image complexity detection function to make sure there aren't too many steps run on the final base sampler which can scramble faces and other simple areas on a large image. 
+The node uses a base -> refiner -> upscale with model -> base to produce the final image. It has an inbuilt image complexity detection function to make sure there aren't too many steps run on the final base sampler which can scramble faces and other simple areas on a large image.
 
 The Base Only version of the sampler uses a slightly different approach. It uses a base -> base -> upscale with model -> base to produce the final image.
 The other key difference with the Base Only version is it skips a step in the middle and adds it to the end. This is a trick which adds extra detail to the image. The smooth step number will add even more extra steps to the end. This might be required if you have an image with a plain background and are seeing some spotty effects created by the skip step method. Usually only 1 extra step is required to clean up the spots. You can also go -1 for very busy images for even more detail.
@@ -71,7 +75,7 @@ The seed is used by the samplers.
 
 The upscale_by setting is how large you want the final image to be before it runs the last base sampler over the image. A value of 1 will output the original image size. 2 will be 2x the size of the original.
 
-The highres_strength setting allows you to control this last stage and how much detail it adds. Setting of 1 is the sweet spot I found didn't scramble faces in a few test images. Dial it down if you are still getting scrambled images, or turn it up if you want to add more detail. 
+The highres_strength setting allows you to control this last stage and how much detail it adds. Setting of 1 is the sweet spot I found didn't scramble faces in a few test images. Dial it down if you are still getting scrambled images, or turn it up if you want to add more detail.
 
 ## Mikey Sampler Tiled and Mikey Sampler Tiled Base Only
 
@@ -80,6 +84,7 @@ The highres_strength setting allows you to control this last stage and how much 
 These samplers use a tiled approach to resample the image after the upscale model has upscaled the image, to help enhance the image with more details.
 
 ## Style Conditioner
+
 ![image](https://github.com/bash-j/mikey_nodes/assets/3195567/b742b8a4-6ab3-4311-b278-db8bda66b5ce)
 
 This chonky node is for injecting the style prompt into your conditioner by averaging the conditioner passed through the node.
@@ -87,11 +92,13 @@ This chonky node is for injecting the style prompt into your conditioner by aver
 A strength value of 0.5 would be even split between the conditioner passed in and the style selected.
 
 ## Empty Latent Ratio Select SDXL
+
 ![image](https://github.com/bash-j/mikey_nodes/assets/3195567/610dae5e-7c86-45fb-893d-06f7ccfe242e)
 
 This node allows you to select from a range of different aspect ratios.
 
 ## Empty Latent Ratio Custom SDXL
+
 ![image](https://github.com/bash-j/mikey_nodes/assets/3195567/784d7b92-dfc7-4f79-9c81-272605ab7934)
 
 This node allows you to enter your own aspect ratio or image size from wherever, and it will make it fit under 1024x1024 resolution.
@@ -124,7 +131,7 @@ It is a really powerful and convenient ratio selector, because you can create al
 
 The swap axis option will rotate the dimensions by 90 degrees if set to true.
 
-If use preset seed is set to true, it will use the seed number to select one of the available presets. This can be used to cycle or randomly select presets, which is super convenient. 
+If use preset seed is set to true, it will use the seed number to select one of the available presets. This can be used to cycle or randomly select presets, which is super convenient.
 
 ## Ratio Advanced
 
@@ -136,18 +143,20 @@ When creating a latent image you need to set the width and height. But the Clip 
 
 This node has options to setup the dimensions for each of these using different methods:
 
- * Select a ratio from the select widget, or choose custom to enter your own dimensions.
- * If you select custom, you need to fill in the width and height options.
- * If you enter a number into the mult input e.g. cte_mult (clip text encoder) it will multiply the latent width and height to create the width and height for that dimension.
- * If you enter a number into the res input, it will create a width and height that fits into the res^2 image size while maintining the same ratio as the latent width and height.
- * If you enter a number into the fit_size input, it will create a width and height that has the largest dimension equal to fit_size while maintaining the same ratio as the latent width and height.
+* Select a ratio from the select widget, or choose custom to enter your own dimensions.
+* If you select custom, you need to fill in the width and height options.
+* If you enter a number into the mult input e.g. cte_mult (clip text encoder) it will multiply the latent width and height to create the width and height for that dimension.
+* If you enter a number into the res input, it will create a width and height that fits into the res^2 image size while maintining the same ratio as the latent width and height.
+* If you enter a number into the fit_size input, it will create a width and height that has the largest dimension equal to fit_size while maintaining the same ratio as the latent width and height.
 
 ## Resize Image for SDXL
+
 ![image](https://github.com/bash-j/mikey_nodes/assets/3195567/85cd45ef-933b-4d95-9c73-717b944df7e2)
 
 This node allows you to resize an image to fit into 1024x1024 resolution. Good for Img2Img workflows.
 
 ## Batch Resize Image for SDXL
+
 ![image](https://github.com/bash-j/mikey_nodes/assets/3195567/fb5ee831-9895-4901-91fa-fd0771f91a1d)
 
 Given a path to a folder containing images, it will resize all images in the folder to fit the 1024^2 resolution and feed into the workflow. Careful of folders with lots of images!
@@ -161,6 +170,7 @@ The filename will start with a datestamp, then part of the positive prompt.
 It will also save the positive prompt and negative prompt to the png data.
 
 ## Upscale Tile Calculator
+
 ![image](https://github.com/bash-j/mikey_nodes/assets/3195567/6f550f38-3e6a-4659-87fb-92deb5d98460)
 
 Made for the [Ultimate SD Upscaler](https://github.com/ssitu/ComfyUI_UltimateSDUpscale) to help calcuate tile size to evenly fit inside the larger image and not get weird edges.
@@ -168,6 +178,7 @@ Made for the [Ultimate SD Upscaler](https://github.com/ssitu/ComfyUI_UltimateSDU
 The resolution is what is suitable for the model you are using, 1.5: 512, 2.1: 768, SDXL Base: 1024, SDXL Refiner: 768
 
 ## Wildcard Processor
+
 ![image](https://github.com/bash-j/mikey_nodes/assets/3195567/ce62e6d7-1982-4c53-bde1-7569c94322e3)
 
 This node is for building a string using your wildcard files.
@@ -213,7 +224,8 @@ Converts an integer to a string.
 Converts a float to a string.
 
 ## Removed Nodes
- - VAE Decode 6GB
+
+- VAE Decode 6GB
 
 ## Installation
 
