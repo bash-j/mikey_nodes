@@ -68,6 +68,8 @@ def get_cached_file_hashes():
 
 def get_file_hash(file_path):
     # check if the file hash is already cached
+    # replace \ with / in file_path
+    file_path = file_path.replace('\\', '/')
     cached_file_hashes = get_cached_file_hashes()
     file_name = os.path.basename(file_path)
     if file_name in cached_file_hashes:
@@ -437,6 +439,15 @@ def add_metadata_to_dict(info_dict, **kwargs):
             else:
                 info_dict[key].append(value)
 
+def load_lora(model, clip, lora_filename, lora_multiplier, lora_clip_multiplier):
+    try:
+        print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
+        model, clip_lora = LoraLoader.load_lora(model, clip, lora_filename, lora_multiplier, lora_clip_multiplier)
+        return model, clip
+    except:
+        print('Warning: LoRA file ' + lora_filename + ' not found or file path is invalid. Skipping this LoRA.')
+        return model, clip
+
 def extract_and_load_loras(text, model, clip):
     # load loras detected in the prompt text
     # The text for adding LoRA to the prompt, <lora:filename:multiplier>, is only used to enable LoRA, and is erased from prompt afterwards
@@ -457,14 +468,17 @@ def extract_and_load_loras(text, model, clip):
             if '.safetensors' not in lora_filename:
                 lora_filename += '.safetensors'
             # get the lora multiplier
-            lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
+            try:
+                lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
+            except:
+                lora_multiplier = 1.0
             print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
             # apply the lora to the clip using the LoraLoader.load_lora function
             # def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
             # ...
             # return (model_lora, clip_lora)
             # apply the lora to the clip
-            model, clip_lora = LoraLoader.load_lora(model, clip, lora_filename, lora_multiplier, lora_multiplier)
+            model, clip = load_lora(model, clip, lora_filename, lora_multiplier, lora_multiplier)
     # strip the lora prompts from the text
     stripped_text = re.sub(lora_re, '', stripped_text)
     return model, clip, stripped_text
@@ -1916,14 +1930,14 @@ class PromptWithStyleV3:
                 if '.safetensors' not in lora_filename:
                     lora_filename += '.safetensors'
                 # get the lora multiplier
-                lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
+                try:
+                    lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
+                except:
+                    lora_multiplier = 1.0
                 print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
                 # apply the lora to the clip using the LoraLoader.load_lora function
-                # def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
-                # ...
-                # return (model_lora, clip_lora)
                 # apply the lora to the clip
-                model, clip_lora = LoraLoader.load_lora(self, model, clip, lora_filename, lora_multiplier, lora_multiplier)
+                model, clip = load_lora(model, clip, lora_filename, lora_multiplier, lora_multiplier)
                 stripped_text = stripped_text.replace(f'<lora:{lora_filename}:{lora_multiplier}>', '')
                 stripped_text = stripped_text.replace(f'<lora:{lora_filename}>', '')
         return model, clip, stripped_text
@@ -2242,12 +2256,18 @@ class LoraSyntaxProcessor:
                 if '.safetensors' not in lora_filename:
                     lora_filename += '.safetensors'
                 # get the lora multiplier
-                lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
-                print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
-                model, clip_lora = LoraLoader.load_lora(self, model, clip, lora_filename, lora_multiplier, lora_multiplier)
+                try:
+                    lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
+                except:
+                    lora_multiplier = 1.0    
+                try:
+                    print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
+                    model, clip = load_lora(model, clip, lora_filename, lora_multiplier, lora_multiplier)
+                except:
+                    print('Warning: LoRA file ' + lora_filename + ' not found or file path is invalid. Skipping this LoRA.')
         # strip lora syntax from text
         stripped_text = re.sub(lora_re, '', stripped_text)
-        return (model, clip_lora, stripped_text,  text, )
+        return (model, clip, stripped_text,  text, )
 
 class WildcardAndLoraSyntaxProcessor:
     def __init__(self):
@@ -2290,14 +2310,17 @@ class WildcardAndLoraSyntaxProcessor:
                 if '.safetensors' not in lora_filename:
                     lora_filename += '.safetensors'
                 # get the lora multiplier
-                lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
+                try:
+                    lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
+                except:
+                    lora_multiplier = 1.0
                 print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
                 # apply the lora to the clip using the LoraLoader.load_lora function
-                # def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
-                # ...
-                # return (model_lora, clip_lora)
-                # apply the lora to the clip
-                model, clip_lora = LoraLoader.load_lora(self, model, clip, lora_filename, lora_multiplier, lora_multiplier)
+                try:
+                    print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
+                    model, clip = load_lora(model, clip, lora_filename, lora_multiplier, lora_multiplier)
+                except:
+                    print('Warning: LoRA file ' + lora_filename + ' not found or file path is invalid. Skipping this LoRA.')
         # strip lora syntax from text
         stripped_text = re.sub(lora_re, '', stripped_text)
         return model, clip, stripped_text
@@ -3849,6 +3872,7 @@ class CheckpointLoaderSimpleMikey:
     def load_checkpoint(self, ckpt_name, output_vae=True, output_clip=True, unique_id=None, extra_pnginfo=None, prompt=None):
         ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
         out = comfy.sd.load_checkpoint_guess_config(ckpt_path, output_vae=True, output_clip=True, embedding_directory=folder_paths.get_folder_paths("embeddings"))
+        #print(ckpt_path)
         hash = get_file_hash(ckpt_path)
         ckpt_name = os.path.basename(ckpt_name)
         #prompt.get(str(unique_id))['inputs']['output_ckpt_hash'] = hash
@@ -3867,25 +3891,57 @@ class CheckpointHash:
     CATEGORY = "Mikey/Loaders"
 
     def get_hash(self, ckpt_name, extra_pnginfo, prompt, unique_id):
-        ckpt_path = folder_paths.get_full_path("checkpoints", ckpt_name)
+        file_list = folder_paths.get_filename_list("checkpoints")
+        matching_file = [s for s in file_list if ckpt_name in s][0]
+        ckpt_path = folder_paths.get_full_path("checkpoints", matching_file)
         hash = get_file_hash(ckpt_path)
+        ckpt_name = os.path.basename(ckpt_name)
         prompt.get(str(unique_id))['inputs']['output_ckpt_hash'] = hash
         prompt.get(str(unique_id))['inputs']['output_ckpt_name'] = ckpt_name
         return (get_file_hash(ckpt_path),)
 
-class SRPromptInputAdd:
+class SRStringPromptInput:
     @classmethod
     def INPUT_TYPES(s):
         return {'required': {'input_str': ('STRING', {'forceInput': True}),},
-                "hidden": {"unique_id": "UNIQUE_ID", "extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"}}
+                "hidden": {"unique_id": "UNIQUE_ID", "prompt": "PROMPT"}}
     
     RETURN_TYPES = ("STRING",)
     FUNCTION = "add"
     CATEGORY = "Mikey/Meta"
 
-    def add(self, input_str, unique_id=None, extra_pnginfo=None, prompt=None):
-        prompt.get(str(unique_id))['inputs']['input_str'] = input_str
+    def add(self, input_str, unique_id=None, prompt=None):
+        prompt.get(str(unique_id))['inputs']['sr_val'] = input_str
         return (input_str,)
+
+class SRIntPromptInput:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {'required': {'input_int': ('INT', {'forceInput': True}),},
+                "hidden": {"unique_id": "UNIQUE_ID", "extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"}}
+    
+    RETURN_TYPES = ("INT",)
+    RETURN_NAMES = ("output_int",)
+    FUNCTION = "add"
+    CATEGORY = "Mikey/Meta"
+
+    def add(self, input_int, extra_pnginfo, unique_id, prompt):
+        prompt.get(str(unique_id))['inputs']['sr_val'] = str(input_int)
+        return (input_int,)
+
+class SRFloatPromptInput:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {'required': {'input_float': ('FLOAT', {'forceInput': True}),},
+                "hidden": {"unique_id": "UNIQUE_ID", "prompt": "PROMPT"}}
+    
+    RETURN_TYPES = ("FLOAT",)
+    FUNCTION = "add"
+    CATEGORY = "Mikey/Meta"
+
+    def add(self, input_float, unique_id=None, prompt=None):
+        prompt.get(str(unique_id))['inputs']['sr_val'] = str(input_float)
+        return (input_float,)
 
 class TextPreserve:
     @classmethod
@@ -4879,6 +4935,9 @@ NODE_CLASS_MAPPINGS = {
     'Text2InputOr3rdOption': Text2InputOr3rdOption,
     'Checkpoint Loader Simple Mikey': CheckpointLoaderSimpleMikey,
     'CheckpointHash': CheckpointHash,
+    'SRStringPromptInput': SRStringPromptInput,
+    'SRIntPromptInput': SRIntPromptInput,
+    'SRFloatPromptInput': SRFloatPromptInput,
     'TextPreserve': TextPreserve,
     'TextConcat': TextConcat,
     'OobaPrompt': OobaPrompt,
@@ -4942,6 +5001,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'Text2InputOr3rdOption': 'Text 2 Inputs Or 3rd Option Instead (Mikey)',
     'Checkpoint Loader Simple Mikey': 'Checkpoint Loader Simple (Mikey)',
     'CheckpointHash': 'Checkpoint Hash (Mikey)',
+    'SRStringPromptInput': 'SR String Prompt Input (Mikey)',
+    'SRIntPromptInput': 'SR Int Prompt Input (Mikey)',
+    'SRFloatPromptInput': 'SR Float Prompt Input (Mikey)',
     'TextPreserve': 'Text Preserve (Mikey)',
     'TextConcat': 'Text Concat (Mikey)',
     'OobaPrompt': 'OobaPrompt (Mikey)',
