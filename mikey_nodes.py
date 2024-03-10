@@ -440,13 +440,15 @@ def add_metadata_to_dict(info_dict, **kwargs):
                 info_dict[key].append(value)
 
 def load_lora(model, clip, lora_filename, lora_multiplier, lora_clip_multiplier):
-    try:
-        print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
-        model, clip_lora = LoraLoader.load_lora(model, clip, lora_filename, lora_multiplier, lora_clip_multiplier)
-        return model, clip
-    except:
-        print('Warning: LoRA file ' + lora_filename + ' not found or file path is invalid. Skipping this LoRA.')
-        return model, clip
+    #try:
+    print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
+    #full_lora_path = folder_paths.get_full_path("loras", lora_filename)
+    ll = LoraLoader()
+    model, clip_lora = ll.load_lora(model, clip, lora_filename, lora_multiplier, lora_clip_multiplier)
+    return model, clip_lora
+    #except:
+    #    print('Warning: LoRA file ' + lora_filename + ' not found or file path is invalid. Skipping this LoRA.')
+    #    return model, clip
 
 def extract_and_load_loras(text, model, clip):
     # load loras detected in the prompt text
@@ -472,11 +474,7 @@ def extract_and_load_loras(text, model, clip):
                 lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
             except:
                 lora_multiplier = 1.0
-            print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
             # apply the lora to the clip using the LoraLoader.load_lora function
-            # def load_lora(self, model, clip, lora_name, strength_model, strength_clip):
-            # ...
-            # return (model_lora, clip_lora)
             # apply the lora to the clip
             model, clip = load_lora(model, clip, lora_filename, lora_multiplier, lora_multiplier)
     # strip the lora prompts from the text
@@ -1934,7 +1932,6 @@ class PromptWithStyleV3:
                     lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
                 except:
                     lora_multiplier = 1.0
-                print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
                 # apply the lora to the clip using the LoraLoader.load_lora function
                 # apply the lora to the clip
                 model, clip = load_lora(model, clip, lora_filename, lora_multiplier, lora_multiplier)
@@ -2260,11 +2257,7 @@ class LoraSyntaxProcessor:
                     lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
                 except:
                     lora_multiplier = 1.0    
-                try:
-                    print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
-                    model, clip = load_lora(model, clip, lora_filename, lora_multiplier, lora_multiplier)
-                except:
-                    print('Warning: LoRA file ' + lora_filename + ' not found or file path is invalid. Skipping this LoRA.')
+                model, clip = load_lora(model, clip, lora_filename, lora_multiplier, lora_multiplier)
         # strip lora syntax from text
         stripped_text = re.sub(lora_re, '', stripped_text)
         return (model, clip, stripped_text,  text, )
@@ -2314,13 +2307,8 @@ class WildcardAndLoraSyntaxProcessor:
                     lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
                 except:
                     lora_multiplier = 1.0
-                print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
                 # apply the lora to the clip using the LoraLoader.load_lora function
-                try:
-                    print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
-                    model, clip = load_lora(model, clip, lora_filename, lora_multiplier, lora_multiplier)
-                except:
-                    print('Warning: LoRA file ' + lora_filename + ' not found or file path is invalid. Skipping this LoRA.')
+                model, clip = load_lora(model, clip, lora_filename, lora_multiplier, lora_multiplier)
         # strip lora syntax from text
         stripped_text = re.sub(lora_re, '', stripped_text)
         return model, clip, stripped_text
