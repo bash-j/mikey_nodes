@@ -440,15 +440,15 @@ def add_metadata_to_dict(info_dict, **kwargs):
                 info_dict[key].append(value)
 
 def load_lora(model, clip, lora_filename, lora_multiplier, lora_clip_multiplier):
-    #try:
-    print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
-    #full_lora_path = folder_paths.get_full_path("loras", lora_filename)
-    ll = LoraLoader()
-    model, clip_lora = ll.load_lora(model, clip, lora_filename, lora_multiplier, lora_clip_multiplier)
-    return model, clip_lora
-    #except:
-    #    print('Warning: LoRA file ' + lora_filename + ' not found or file path is invalid. Skipping this LoRA.')
-    #    return model, clip
+    try:
+        print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
+        #full_lora_path = folder_paths.get_full_path("loras", lora_filename)
+        ll = LoraLoader()
+        model, clip_lora = ll.load_lora(model, clip, lora_filename, lora_multiplier, lora_clip_multiplier)
+        return model, clip_lora
+    except:
+        print('Warning: LoRA file ' + lora_filename + ' not found or file path is invalid. Skipping this LoRA.')
+        return model, clip
 
 def extract_and_load_loras(text, model, clip):
     # load loras detected in the prompt text
