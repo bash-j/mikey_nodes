@@ -441,10 +441,10 @@ def add_metadata_to_dict(info_dict, **kwargs):
 
 def load_lora(model, clip, lora_filename, lora_multiplier, lora_clip_multiplier):
     try:
-        print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
         #full_lora_path = folder_paths.get_full_path("loras", lora_filename)
         ll = LoraLoader()
         model, clip_lora = ll.load_lora(model, clip, lora_filename, lora_multiplier, lora_clip_multiplier)
+        print('Loading LoRA: ' + lora_filename + ' with multiplier: ' + str(lora_multiplier))
         return model, clip_lora
     except:
         print('Warning: LoRA file ' + lora_filename + ' not found or file path is invalid. Skipping this LoRA.')
