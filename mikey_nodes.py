@@ -220,7 +220,7 @@ def read_styles():
 def find_and_replace_wildcards(prompt, offset_seed, debug=False):
     # wildcards use the __file_name__ syntax with optional |word_to_find
     wildcard_path = os.path.join(folder_paths.base_path, 'wildcards')
-    wildcard_regex = r'((\d+)\$\$)?__(!|\+|-|\*)?((?:[^|_]+_)*[^|_]+)((?:\|[^|]+)*)__' 
+    wildcard_regex = r'((\d+)\$\$)?__(!|\+|-|\*)?((?:[^|_]+_)*[^|_]+)((?:\|[^|]+)*)__'
     # r'(\[(\d+)\$\$)?__((?:[^|_]+_)*[^|_]+)((?:\|[^|]+)*)__\]?'
     match_strings = []
     random.seed(offset_seed)
@@ -313,6 +313,17 @@ def find_and_replace_wildcards(prompt, offset_seed, debug=False):
         last_end = m.end()
     new_prompt += prompt[last_end:]
     return new_prompt
+
+def process_wildcard_syntax(text, seed):
+    # wildcard sytax is {like|this}
+    # select a random word from the | separated list
+    random.seed(seed)
+    wc_re = re.compile(r'{([^}]+)}')
+    def repl(m):
+        return random.choice(m.group(1).split('|'))
+    for m in wc_re.finditer(text):
+        text = text.replace(m.group(0), repl(m))
+    return text
 
 def search_and_replace(text, extra_pnginfo, prompt):
     if extra_pnginfo is None or prompt is None:
@@ -595,8 +606,20 @@ class WildcardProcessor:
         if extra_pnginfo is None:
             extra_pnginfo = {}
         prompt = search_and_replace(prompt, extra_pnginfo, prompt_)
-        prompt = find_and_replace_wildcards(prompt, seed)
-        return (prompt, )
+        prompt = process_wildcard_syntax(prompt, seed)
+        prompt = process_random_syntax(prompt, seed)
+        new_prompt = find_and_replace_wildcards(prompt, seed)
+        # loop to pick up wildcards that are in wildcard files
+        if new_prompt != prompt:
+            for i in range(10):
+                prompt = new_prompt
+                prompt = search_and_replace(prompt, extra_pnginfo, prompt_)
+                prompt = process_wildcard_syntax(prompt, seed)
+                prompt = process_random_syntax(prompt, seed)
+                new_prompt = find_and_replace_wildcards(prompt, seed)
+                if new_prompt == prompt:
+                    break
+        return (new_prompt, )
 
 class HaldCLUT:
     @classmethod
@@ -2256,7 +2279,7 @@ class LoraSyntaxProcessor:
                 try:
                     lora_multiplier = float(lora_prompt[1]) if lora_prompt[1] != '' else 1.0
                 except:
-                    lora_multiplier = 1.0    
+                    lora_multiplier = 1.0
                 model, clip = load_lora(model, clip, lora_filename, lora_multiplier, lora_multiplier)
         # strip lora syntax from text
         stripped_text = re.sub(lora_re, '', stripped_text)
@@ -3872,7 +3895,7 @@ class CheckpointHash:
     def INPUT_TYPES(s):
         return {"required": { "ckpt_name": ("STRING", {"forceInput": True}),},
                 "hidden": {"unique_id": "UNIQUE_ID", "extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"}}
-    
+
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("ckpt_hash",)
     FUNCTION = "get_hash"
@@ -3893,7 +3916,7 @@ class SRStringPromptInput:
     def INPUT_TYPES(s):
         return {'required': {'input_str': ('STRING', {'forceInput': True}),},
                 "hidden": {"unique_id": "UNIQUE_ID", "prompt": "PROMPT"}}
-    
+
     RETURN_TYPES = ("STRING",)
     FUNCTION = "add"
     CATEGORY = "Mikey/Meta"
@@ -3907,7 +3930,7 @@ class SRIntPromptInput:
     def INPUT_TYPES(s):
         return {'required': {'input_int': ('INT', {'forceInput': True}),},
                 "hidden": {"unique_id": "UNIQUE_ID", "extra_pnginfo": "EXTRA_PNGINFO", "prompt": "PROMPT"}}
-    
+
     RETURN_TYPES = ("INT",)
     RETURN_NAMES = ("output_int",)
     FUNCTION = "add"
@@ -3922,7 +3945,7 @@ class SRFloatPromptInput:
     def INPUT_TYPES(s):
         return {'required': {'input_float': ('FLOAT', {'forceInput': True}),},
                 "hidden": {"unique_id": "UNIQUE_ID", "prompt": "PROMPT"}}
-    
+
     RETURN_TYPES = ("FLOAT",)
     FUNCTION = "add"
     CATEGORY = "Mikey/Meta"
