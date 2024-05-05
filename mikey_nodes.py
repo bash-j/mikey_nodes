@@ -4894,6 +4894,24 @@ class MosaicExpandImage:
         mask = mask.unsqueeze(0)
         return (new_img, mask)
 
+class GetSubdirectories:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {'required': {'directory': ('STRING', {'default': 'base_directory'})}}
+
+    RETURN_TYPES = ('STRING',)
+    RETURN_NAMES = ('subdirectories',)
+    FUNCTION = 'get_subdirectories'
+    OUTPUT_IS_LIST = (True, )
+    CATEGORY = 'Mikey/Utils'
+
+    def get_subdirectories(self, directory):
+        if os.path.isdir(directory):
+            subdirectories = [f.path for f in os.scandir(directory) if f.is_dir()]
+        else:
+            raise Exception(f'{directory} is not a valid directory')
+        return (subdirectories,)
+
 NODE_CLASS_MAPPINGS = {
     'Wildcard Processor': WildcardProcessor,
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
@@ -4957,7 +4975,8 @@ NODE_CLASS_MAPPINGS = {
     'EvalFloats': EvalFloats,
     'ImageOverlay': ImageOverlay,
     'CinematicLook': CinematicLook,
-    'MosaicExpandImage': MosaicExpandImage
+    'MosaicExpandImage': MosaicExpandImage,
+    'GetSubdirectories': GetSubdirectories
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -5023,5 +5042,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'EvalFloats': 'Eval Floats (Mikey)',
     'ImageOverlay': 'Image Overlay (Mikey)',
     'CinematicLook': 'Cinematic Look (Mikey)',
-    'MosaicExpandImage': 'Mosaic Expand Image (Mikey)'
+    'MosaicExpandImage': 'Mosaic Expand Image (Mikey)',
+    'GetSubdirectories': 'Get Subdirectories (Mikey)'
 }
