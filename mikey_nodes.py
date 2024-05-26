@@ -2719,9 +2719,9 @@ def match_histograms(source, reference):
     return matched_img
 
 
-def split_image(img):
+def split_image(img, tile_size=1024):
     """Generate tiles for a given image."""
-    tile_width, tile_height = 1024, 1024
+    tile_width, tile_height = tile_size, tile_size
     width, height = img.width, img.height
 
     # Determine the number of tiles needed
@@ -2854,9 +2854,9 @@ def run_tiler(enlarged_img, base_model, vae, seed, positive_cond_base, negative_
 
     return result
 
-def run_tiler_for_steps(enlarged_img, base_model, vae, seed, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, steps=20, denoise=0.25):
+def run_tiler_for_steps(enlarged_img, base_model, vae, seed, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, steps=20, denoise=0.25, tile_size=1024):
     # Split the enlarged image into overlapping tiles
-    tiles = split_image(enlarged_img)
+    tiles = split_image(enlarged_img, tile_size=tile_size)
 
     # Resample each tile using the AI model
     start_step = int(steps - (steps * denoise))
@@ -3028,7 +3028,8 @@ class MikeySamplerTiledAdvancedBaseOnly:
                              "sampler_name": (comfy.samplers.KSampler.SAMPLERS, ),
                              "scheduler": (comfy.samplers.KSampler.SCHEDULERS, ),
                              "upscale_by": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 10.0, "step": 0.1}),
-                             "tiler_denoise": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.05}),},
+                             "tiler_denoise": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.05}),
+                             "tile_size": ("INT", {"default": 1024, "min": 256, "max": 4096, "step": 64})},
                 "optional": {"image_optional": ("IMAGE",),}}
 
     RETURN_TYPES = ('IMAGE', )
@@ -3073,7 +3074,7 @@ class MikeySamplerTiledAdvancedBaseOnly:
             return img, upscaled_width, upscaled_height
 
     def run(self, seed, base_model, vae, samples, positive_cond_base, negative_cond_base,
-            model_name, upscale_by=2.0, tiler_denoise=0.4,
+            model_name, upscale_by=2.0, tiler_denoise=0.4, tile_size=1024,
             upscale_method='normal', denoise_image=1.0, steps=30, cfg=6.5,
             sampler_name='dpmpp_sde_gpu', scheduler='karras', image_optional=None):
         # if image not none replace samples with decoded image
@@ -3090,7 +3091,7 @@ class MikeySamplerTiledAdvancedBaseOnly:
             img = self.upscale_image(samples, vae, upscale_by, model_name)
             img = tensor2pil(img)
         # phase 2: run tiler
-        tiled_image = run_tiler_for_steps(img, base_model, vae, seed, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, steps, tiler_denoise)
+        tiled_image = run_tiler_for_steps(img, base_model, vae, seed, cfg, sampler_name, scheduler, positive_cond_base, negative_cond_base, steps, tiler_denoise, tile_size)
         return (tiled_image, )
 
 class MikeySamplerTiledBaseOnly(MikeySamplerTiled):
