@@ -4653,7 +4653,7 @@ class LMStudioPrompt:
             'top_p': 0.95,
             'presence_penalty': 0.0,
             'frequency_penalty': 0.0,
-            'max_tokens': 225,
+            #'max_tokens': 8192,
             'stream': False,
             'seed': seed,
         }
