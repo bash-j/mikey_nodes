@@ -4441,7 +4441,7 @@ class LMStudioPrompt:
     @classmethod
     def INPUT_TYPES(s):
         return {'required': {'input_prompt': ('STRING', {'multiline': True, 'default': 'Prompt Text Here', 'dynamicPrompts': False}),
-                             'mode': (['prompt', 'style', 'descriptor', 'character', 'custom'], {'default': 'prompt'}),
+                             'mode': (['prompt', 'pixelwave', 'style', 'descriptor', 'character', 'custom'], {'default': 'prompt'}),
                              'custom_history': ('STRING', {'multiline': False, 'default': 'path to history.json', 'dynamicPrompts': True}),
                              'server_address': ('STRING', {'default': 'localhost'}),
                              'server_port': ('INT', {'default': 1234, 'min': 0, 'max': 65535}),
@@ -4459,7 +4459,7 @@ class LMStudioPrompt:
             return {
                 "messages": [
                     { "role": "system", "content": "You are a helpful assistant." },
-                    { "role": "user", "content": "I say something like 'blonde woman' and you respond with a single prompt which I can use as prompts for an AI txt2image model. Your response to blonde woman would be something like 'Blonde woman wearing a patterned orange, white, and blue sundress, smiling, on a sunny day with a blue sky, surrounded by buildings and palm trees'. It describes the image with lots of details so the AI model will understand what it needs to generate."},
+                    { "role": "user", "content": "I say something like 'blonde woman' and you respond with a single prompt which I can use as prompts for an AI txt2image model. Your response to blonde woman would be something like 'Blonde woman wearing a patterned orange, white, and blue sundress, smiling, on a sunny day with a blue sky, surrounded by buildings and palm trees'. Only respond with the prompt and nothing else."},
                     { "role": "assistant", "content": "Sure thing! Let's begin. What is your first prompt?" },
                     { "role": "user", "content": "futuristic man"},
                     { "role": "assistant", "content": "Man with short black hair in a highly detailed silver and black mechanical exoskeleton suit, holding a futuristic rifle, standing in a futuristic city with tall buildings and flying cars, with a futuristic cityscape in the background."},
@@ -4481,11 +4481,31 @@ class LMStudioPrompt:
                     { "role": "assistant", "content": "A woman is working on a laptop computer. She is wearing a white shirt and black pants. She is sitting at a desk in a modern office with trendy furniture. She has a cup of coffee on the desk next to her."}
                 ]
             }
+        elif mode == 'pixelwave':
+            return {
+                "messages": [
+                    { "role": "system", "content": "You are a helpful assistant." },
+                    { "role": "user", "content": "I say something like 'photo of a blonde woman' and you respond with a single prompt which I can use as prompts for an AI txt2image model. Your response would be something like 'Blonde woman with a flower crown, digital color photograph, tags: flower crown, portrait, beauty, elegance, nature, delicate, floral, soft lighting, feminine, ethereal, detailed, close-up, natural, serene expression, warm tones, pastel background, gentle, artistic.' Only respond with the prompt and nothing else."},
+                    { "role": "assistant", "content": "Sure thing! Let's begin. What is your first prompt?" },
+                    { "role": "user", "content": "cinematic stills inspired by award winning works from master directors"},
+                    { "role": "assistant", "content": "Busy metropolitan subway station, film-style snapshot, inspired by Christopher Nolan's Inception, tags: subway station, busy, metropolitan, Christopher Nolan, Inception, cinematic, bustling crowd, urban setting, surreal elements, film inspiration, dynamic movement, public transport, layered reality, complex narrative, architectural interest, dramatic lighting, fast-paced, perspective play, depth of field, city life"},
+                    { "role": "user", "content": "a futuristic cityscape with flying cars and neon lights"},
+                    { "role": "assistant", "content": "Futuristic cityscape with flying cars and neon lights, digital art, tags: cityscape, flying cars, neon lights, futuristic, skyscrapers, vibrant colors, urban, night, bustling, advanced technology, reflections, cyberpunk, glowing signs, high-tech, atmospheric, dynamic, energy, sci-fi, detailed."},
+                    { "role": "user", "content": "volcano"},
+                    { "role": "assistant", "content": "Volcano at sunset with a sky full of vibrant colors, a watercolor, tags: sunset, volcano, eruption, nature, glowing, dramatic, sky, vibrant, contrast, serene, fiery, landscape, explosion, smoke, ash, powerful, beauty, tranquil, detailed, horizon."},
+                    { "role": "user", "content": "a magical forest with glowing mushrooms and fairies"},
+                    { "role": "assistant", "content": "Magical forest with glowing mushrooms and fairies, an airbrush painting, tags: magical, forest, glowing mushrooms, fairies, fantasy, enchanted, ethereal, whimsical, dreamy, surreal, vibrant colors, nature, detailed, imaginative, mystical, magical creatures, light, fantasy landscape, magical realism, atmospheric, enchanting."},
+                    { "role": "user", "content": "painting of robots inspired by the greats"},
+                    { "role": "assistant", "content": "Robots playing poker, oil on canvas, inspired by the works of Norman Rockwell, tags: robots, poker, oil painting, Norman Rockwell, classic, retro, vintage, humorous, whimsical, detailed, narrative, storytelling, robots in everyday life, human-like, anthropomorphic, playful, imaginative, creative, colorful, traditional art, realistic, humorous, quirky, fun."},
+                    { "role": "user", "content": "a black and white photo of a man in a suit"},
+                    { "role": "assistant", "content": "Gentleman at the bar in a speakeasy, black and white analog photograph, tags: speakeasy, suit, bar, gentleman, 1920s, vintage, classic, detailed, dim lighting, ambiance, retro, dapper, old-fashioned, cocktails, conversation, atmospheric, stylish, sophisticated, nostalgic, elegant, charm."},
+                ]
+            }
         elif mode == 'style':
             return {
                 "messages": [
                     { "role": "system", "content": "You are a helpful assistant." },
-                    { "role": "user", "content": "I say something like 'painting' and you respond with a single prompt which I can use as prompts for an AI txt2image model. Your response to painting would be something like 'Impressionistic, landscape, vivid colors, loose brushstrokes, beauty of nature. Inspired by Claude Monet'. It describes the style of the image that helps convey the overall look of the image without describing the subject of the image. You might also received a description of an image, you will respond with style keywords that compliment the image description."},
+                    { "role": "user", "content": "I say something like 'painting' and you respond with a single prompt which I can use as prompts for an AI txt2image model. Your response to painting would be something like 'Impressionistic, landscape, vivid colors, loose brushstrokes, beauty of nature. Inspired by Claude Monet'. It describes the style of the image that helps convey the overall look of the image without describing the subject of the image. You might also received a description of an image, you will respond with style keywords that compliment the image description. Only respond with the prompt and nothing else."},
                     { "role": "assistant", "content": "Sure thing! Let's begin. What is your first prompt?" },
                     { "role": "user", "content": "painting"},
                     { "role": "assistant", "content": "Realism, oil painting, dark shadows, bright highlights, focus on capturing light and texture. Inspired by Caravaggio's chiaroscuro technique"},
@@ -4519,7 +4539,7 @@ class LMStudioPrompt:
             return {
                 "messages": [
                     { "role": "system", "content": "You are a helpful assistant." },
-                    { "role": "user", "content": "I say something like 'color' and you respond with a single prompt which I can use to build a prompt for an AI txt2image model. Your response to color would be something like 'red'. It is a very short description to add dynamic variety to the prompt."},
+                    { "role": "user", "content": "I say something like 'color' and you respond with a single prompt which I can use to build a prompt for an AI txt2image model. Your response to color would be something like 'red'. It is a very short description to add dynamic variety to the prompt. Only respond with the prompt and nothing else."},
                     { "role": "assistant", "content": "Sure thing! Let's begin. What is your first prompt?" },
                     { "role": "user", "content": "color"},
                     { "role": "assistant", "content": "burnt sienna"},
@@ -4575,7 +4595,7 @@ class LMStudioPrompt:
         # check if json file in root comfy directory called oooba.json
         history = self.history(mode, custom_history)
         if mode == 'prompt':
-            prompt = f'{prompt}, describe in detail.'
+            prompt = f'{prompt}'
         if mode == 'descriptor':
             # use seed to add a bit more randomness to the prompt
             spice = ['a', 'the', 'this', 'that',
@@ -4619,7 +4639,7 @@ class LMStudioPrompt:
             'top_p': 0.95,
             'presence_penalty': 0.0,
             'frequency_penalty': 0.0,
-            'max_tokens': 1200,
+            'max_tokens': 225,
             'stream': False,
             'seed': seed,
         }
