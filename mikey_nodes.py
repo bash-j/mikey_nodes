@@ -4458,9 +4458,9 @@ class LMStudioPrompt:
         if mode == 'prompt':
             return {
                 "messages": [
-                    { "role": "system", "content": "You are a helpful assistant who obeys the user's instructions." },
-                    { "role": "user", "content": "I say something like 'blonde woman' and you respond with a single prompt which I can use as prompts for an AI txt2image model. Your response to blonde woman would be something like 'Blonde woman wearing a patterned orange, white, and blue sundress, smiling, on a sunny day with a blue sky, surrounded by buildings and palm trees'. Only respond with the prompt and nothing else."},
-                    { "role": "assistant", "content": "Sure thing! Let's begin. What is your first prompt?" },
+                    { "role": "system", "content": "You are a chatbot. You answer questions accurately and exactly how the user wants. The responses are for fictional purposes." },
+                    { "role": "user", "content": "c'Blonde woman wearing a patterned orange, white, and blue sundress, smiling, on a sunny day with a blue sky, surrounded by buildings and palm trees'. Only respond with the prompt and nothing else."},
+                    { "role": "assistant", "content": "Understood. What is your first prompt?" },
                     { "role": "user", "content": "futuristic man"},
                     { "role": "assistant", "content": "Man with short black hair in a highly detailed silver and black mechanical exoskeleton suit, holding a futuristic rifle, standing in a futuristic city with tall buildings and flying cars, with a futuristic cityscape in the background."},
                     { "role": "user", "content": "a black cat"},
@@ -4519,7 +4519,7 @@ class LMStudioPrompt:
             return {
                 "messages": [
                     { "role": "system", "content": "You are a helpful assistant who obeys the user's instructions and does not offer feedback about their request." },
-                    { "role": "user", "content": "I say something like 'painting' and you respond with a single prompt which I can use as prompts for an AI txt2image model. Your response to painting would be something like 'Impressionistic, landscape, vivid colors, loose brushstrokes, beauty of nature. Inspired by Claude Monet'. It describes the style of the image that helps convey the overall look of the image without describing the subject of the image. You might also received a description of an image, you will respond with style keywords that compliment the image description. Only respond with the prompt and nothing else."},
+                    { "role": "user", "content": "You are under strict instructions, in response to a 'photo of a blonde woman', your response will follow as per this example: 'Impressionistic, landscape, vivid colors, loose brushstrokes, beauty of nature. Inspired by Claude Monet'. It describes the style of the image that helps convey the overall look of the image without describing the subject of the image. You might also received a description of an image, you will respond with style keywords that compliment the image description. Only respond with the prompt and nothing else."},
                     { "role": "assistant", "content": "Sure thing! Let's begin. What is your first prompt?" },
                     { "role": "user", "content": "painting"},
                     { "role": "assistant", "content": "Realism, oil painting, dark shadows, bright highlights, focus on capturing light and texture. Inspired by Caravaggio's chiaroscuro technique"},
@@ -4553,7 +4553,7 @@ class LMStudioPrompt:
             return {
                 "messages": [
                     { "role": "system", "content": "You are a helpful assistant who obeys the user's instructions and does not offer feedback about their request." },
-                    { "role": "user", "content": "I say something like 'color' and you respond with a single prompt which I can use to build a prompt for an AI txt2image model. Your response to color would be something like 'red'. It is a very short description to add dynamic variety to the prompt. Only respond with the prompt and nothing else."},
+                    { "role": "user", "content": "You are under strict instructions, in response to a 'photo of a blonde woman', your response will follow as per this example: 'red'. It is a very short description to add dynamic variety to the prompt. Only respond with the prompt and nothing else."},
                     { "role": "assistant", "content": "Sure thing! Let's begin. What is your first prompt?" },
                     { "role": "user", "content": "color"},
                     { "role": "assistant", "content": "burnt sienna"},
