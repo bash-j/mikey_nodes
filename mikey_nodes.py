@@ -14,6 +14,7 @@ import sys
 from textwrap import wrap
 
 import html
+import latent_preview
 import requests
 import numpy as np
 from PIL import Image, ImageOps, ImageDraw, ImageFilter, ImageChops, ImageFont
@@ -41,6 +42,7 @@ from comfy.model_management import soft_empty_cache, free_memory, get_torch_devi
 from nodes import LoraLoader, ConditioningAverage, common_ksampler, ImageScale, ImageScaleBy, VAEEncode, VAEDecode
 import comfy.utils
 from comfy_extras.chainner_models import model_loading
+from comfy_extras.nodes_custom_sampler import Noise_EmptyNoise, Noise_RandomNoise
 from comfy import model_management, model_base
 
 def calculate_file_hash(file_path):
@@ -3264,6 +3266,66 @@ class MikeyLatentTileSampler:
         latent["samples"] = stitch_latent_tensors(latent_samples.shape, resampled_tiles)
         return (latent,)
 
+class MikeyLatentTileSamplerCustom:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required":
+                    {"model": ("MODEL",),
+                    "add_noise": ("BOOLEAN", {"default": True}),
+                    "noise_seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                    "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step":0.1, "round": 0.01}),
+                    "positive": ("CONDITIONING", ),
+                    "negative": ("CONDITIONING", ),
+                    "sampler": ("SAMPLER", ),
+                    "sigmas": ("SIGMAS", ),
+                    "latent_image": ("LATENT", ),
+                    "tile_size": ("INT", {"default": 1024, "min": 256, "max": 4096, "step": 64}),
+                     }
+                }
+
+    RETURN_TYPES = ("LATENT", )
+    RETURN_NAMES = ("samples", )
+    FUNCTION = "tile_sample"
+    CATEGORY = "Mikey/Sampling"
+
+    def sample(self, model, add_noise, noise_seed, cfg, positive, negative, sampler, sigmas, latent_image):
+        latent = latent_image
+        latent_image = latent["samples"]
+        if not add_noise:
+            noise = Noise_EmptyNoise().generate_noise(latent)
+        else:
+            noise = Noise_RandomNoise(noise_seed).generate_noise(latent)
+
+        noise_mask = None
+        if "noise_mask" in latent:
+            noise_mask = latent["noise_mask"]
+
+        x0_output = {}
+        callback = latent_preview.prepare_callback(model, sigmas.shape[-1] - 1, x0_output)
+
+        disable_pbar = not comfy.utils.PROGRESS_BAR_ENABLED
+        samples = comfy.sample.sample_custom(model, noise, cfg, sampler, sigmas, positive, negative, latent_image, noise_mask=noise_mask, callback=callback, disable_pbar=disable_pbar, seed=noise_seed)
+
+        out = latent.copy()
+        out["samples"] = samples
+        if "x0" in x0_output:
+            out_denoised = latent.copy()
+            out_denoised["samples"] = model.model.process_latent_out(x0_output["x0"].cpu())
+        else:
+            out_denoised = out
+        return out_denoised
+
+    def tile_sample(self, model, add_noise, noise_seed, cfg, positive, negative, sampler, sigmas, latent_image, tile_size):
+        latent = latent_image.copy()
+        # split image into tiles
+        latent_samples = latent["samples"]
+        tiles = split_latent_tensor(latent_samples, tile_size)
+        # resample each tile using self.sample
+        resampled_tiles = [(coords, self.sample(model, add_noise, noise_seed, cfg, positive, negative, sampler, sigmas, {"samples": tile})["samples"]) for coords, tile in tiles]
+        # stitch the tiles to get the final upscaled latent tensor
+        latent["samples"] = stitch_latent_tensors(latent_samples.shape, resampled_tiles)
+        return (latent, )
+
 class FaceFixerOpenCV:
     @classmethod
     def INPUT_TYPES(s):
@@ -5073,6 +5135,7 @@ NODE_CLASS_MAPPINGS = {
     'Mikey Sampler Tiled': MikeySamplerTiled,
     'Mikey Sampler Tiled Base Only': MikeySamplerTiledBaseOnly,
     'MikeyLatentTileSampler': MikeyLatentTileSampler,
+    'MikeyLatentTileSamplerCustom': MikeyLatentTileSamplerCustom,
     'FaceFixerOpenCV': FaceFixerOpenCV,
     'AddMetaData': AddMetaData,
     'SaveMetaData': SaveMetaData,
@@ -5141,6 +5204,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'MikeySamplerTiledAdvancedBaseOnly': 'Mikey Sampler Tiled Advanced Base Only',
     'Mikey Sampler Tiled Base Only': 'Mikey Sampler Tiled Base Only',
     'MikeyLatentTileSampler': 'Latent Tile Sampler (Mikey)',
+    'MikeyLatentTileSamplerCustom': 'Latent Tile Sampler Custom (Mikey)',
     'FaceFixerOpenCV': 'Face Fixer OpenCV (Mikey)',
     'AddMetaData': 'AddMetaData (Mikey)',
     'SaveMetaData': 'SaveMetaData (Mikey)',
