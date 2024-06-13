@@ -5113,6 +5113,8 @@ class TextPadderMikey:
     CATEGORY = 'Mikey/Text'
 
     def pad_text(self, text, length, technique, padding_character):
+        if len(text) >= length:
+            return (text,)
         if technique == 'pad':
             padded_text = text.ljust(length, padding_character)
         elif technique == 'repeat':
