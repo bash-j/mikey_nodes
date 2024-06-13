@@ -5098,6 +5098,28 @@ class GetSubdirectories:
             raise Exception(f'{directory} is not a valid directory')
         return (subdirectories,)
 
+class TextPadderMikey:
+    # Pad text to a fixed length with a specified padding character
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {'required': {'text': ('STRING', {'default': 'text to pad'}),
+                             'length': ('INT', {'default': 512, 'min': 1, 'max': 1000}),
+                             'technique': (['pad','repeat'], {'default': 'pad'}),
+                             'padding_character': ('STRING', {'default': ','})}}
+
+    RETURN_TYPES = ('STRING',)
+    RETURN_NAMES = ('padded_text',)
+    FUNCTION = 'pad_text'
+    CATEGORY = 'Mikey/Text'
+
+    def pad_text(self, text, length, technique, padding_character):
+        if technique == 'pad':
+            padded_text = text.ljust(length, padding_character)
+        elif technique == 'repeat':
+            # repeat but don't cut off the text
+            padded_text = text * (length // len(text))
+        return (padded_text,)
+
 NODE_CLASS_MAPPINGS = {
     'Wildcard Processor': WildcardProcessor,
     'Empty Latent Ratio Select SDXL': EmptyLatentRatioSelector,
@@ -5164,7 +5186,8 @@ NODE_CLASS_MAPPINGS = {
     'ImageOverlay': ImageOverlay,
     'CinematicLook': CinematicLook,
     'MosaicExpandImage': MosaicExpandImage,
-    'GetSubdirectories': GetSubdirectories
+    'GetSubdirectories': GetSubdirectories,
+    'TextPadderMikey': TextPadderMikey
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -5233,5 +5256,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'ImageOverlay': 'Image Overlay (Mikey)',
     'CinematicLook': 'Cinematic Look (Mikey)',
     'MosaicExpandImage': 'Mosaic Expand Image (Mikey)',
-    'GetSubdirectories': 'Get Subdirectories (Mikey)'
+    'GetSubdirectories': 'Get Subdirectories (Mikey)',
+    'TextPadderMikey': 'Text Padder (Mikey)'
 }
