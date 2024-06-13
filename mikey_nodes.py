@@ -5118,6 +5118,8 @@ class TextPadderMikey:
         elif technique == 'repeat':
             # repeat but don't cut off the text
             padded_text = text * (length // len(text))
+            # fill the rest with the padding character
+            padded_text = padded_text.ljust(length, padding_character)
         return (padded_text,)
 
 NODE_CLASS_MAPPINGS = {
