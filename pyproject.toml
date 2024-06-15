@@ -1,0 +1,14 @@
+[project]
+name = "mikey_nodes"
+description = "Collection of convenient nodes. Wildcard, style, image, llm, haldclut, metadata, and more."
+version = "1.0.0"
+license = "MIT License"
+
+[project.urls]
+Repository = "https://github.com/bash-j/mikey_nodes"
+#  Used by Comfy Registry https://comfyregistry.org
+
+[tool.comfy]
+PublisherId = "humblemikey"
+DisplayName = "mikey_nodes"
+Icon = ""
