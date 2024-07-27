@@ -633,7 +633,7 @@ class HaldCLUT:
                              "gamma_correction": (['True','False'],)}}
 
     RETURN_TYPES = ('IMAGE',)
-    RETURN_NAMES = ('image,')
+    RETURN_NAMES = ('image',)
     FUNCTION = 'apply_haldclut'
     CATEGORY = 'Mikey/Image'
     OUTPUT_NODE = True
