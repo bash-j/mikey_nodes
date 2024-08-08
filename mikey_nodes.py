@@ -37,6 +37,7 @@ spec = importlib.util.spec_from_file_location(module_name, file_path)
 module = importlib.util.module_from_spec(spec)
 sys.modules[module_name] = module
 spec.loader.exec_module(module)
+import comfy_extras
 from nodes_upscale_model import UpscaleModelLoader, ImageUpscaleWithModel
 from comfy.model_management import soft_empty_cache, free_memory, get_torch_device, current_loaded_models, load_model_gpu
 from nodes import LoraLoader, ConditioningAverage, common_ksampler, ImageScale, ImageScaleBy, VAEEncode, VAEDecode
@@ -320,11 +321,12 @@ def process_wildcard_syntax(text, seed):
     # wildcard sytax is {like|this}
     # select a random word from the | separated list
     random.seed(seed)
-    wc_re = re.compile(r'{([^}]+)}')
+    wc_re = re.compile(r'{([^{}]*)}')
     def repl(m):
-        return random.choice(m.group(1).split('|'))
-    for m in wc_re.finditer(text):
-        text = text.replace(m.group(0), repl(m))
+        parts = m.group(1).split('|')
+        return random.choice(parts)
+    while wc_re.search(text):
+        text = wc_re.sub(repl, text)
     return text
 
 def search_and_replace(text, extra_pnginfo, prompt):
@@ -5212,6 +5214,122 @@ class SD3TextConditioningWithOptionsOnePrompt:
             [[negative_conditioning, {'pooled_output': negative_pooled}]],
         )
 
+# model merge PixArtSigmaXL2_1024MS
+# blocks.0 to 27
+# final_layer, pos_embed, t_block.1, t_embedder, x_embedder, y_embedder
+class ModelMergePixArtSigmaXL2_1024MS(comfy_extras.nodes_model_merging.ModelMergeBlocks):
+    CATEGORY = 'Mikey/Model Merging/model_specific'
+
+    @classmethod
+    def INPUT_TYPES(s):
+        arg_dict = {'model1': ('MODEL',),
+                    'model2': ('MODEL',)}
+
+        argument = ('FLOAT', {'default': 1.0, 'min': 0.0, 'max': 1.0, 'step': 0.01})
+
+        for i in range(28):
+            arg_dict['blocks.{}.'.format(i)] = argument
+
+        arg_dict['final_layer'] = argument
+        arg_dict['pos_embed'] = argument
+        arg_dict['t_block.1'] = argument
+        arg_dict['t_embedder'] = argument
+        arg_dict['x_embedder'] = argument
+        arg_dict['y_embedder'] = argument
+
+        return {'required': arg_dict}
+
+class ModelMergeTrainDiff:
+    # https://github.com/hako-mikan/sd-webui-supermerger
+    @classmethod
+    def INPUT_TYPES(s):
+        return {'required': {'model1': ('MODEL',),
+                             'model2': ('MODEL',),
+                             'model3': ('MODEL',),
+                             'ratio': ('FLOAT', {'default': 1.0, 'min': -10.0, 'max': 10.0, 'step': 0.01})}}
+
+    RETURN_TYPES = ('MODEL',)
+    FUNCTION = 'traindiff'
+    CATEGORY = 'Mikey/Model Merging'
+
+    def traindiff(self, model1, model2, model3, **kwargs):
+        theta_0 = model1.clone()
+        m = model1.clone()
+        mp = m.get_key_patches("diffusion_model.")
+        theta_1 = model2.get_key_patches("diffusion_model.")
+        theta_2 = model3.get_key_patches("diffusion_model.")
+
+        default_ratio = next(iter(kwargs.values()))
+
+        for k in mp:
+            ratio = default_ratio
+            k_unet = k[len("diffusion_model."):]
+
+            last_arg_size = 0
+            for arg in kwargs:
+                if k_unet.startswith(arg) and last_arg_size < len(arg):
+                    ratio = kwargs[arg]
+                    last_arg_size = len(arg)
+
+            diff_AB = theta_1[k][0].float() - theta_2[k][0].float()
+
+            distance_A0 = torch.abs(theta_1[k][0].float() - theta_2[k][0].float())
+            distance_A1 = torch.abs(theta_1[k][0].float() - mp[k][0].float())
+
+            sum_distances = distance_A0 + distance_A1
+
+            scale = torch.where(sum_distances != 0, distance_A1 / sum_distances, torch.tensor(0.).float())
+            sign_scale = torch.sign(theta_1[k][0].float() - theta_2[k][0].float())
+            scale = sign_scale * torch.abs(scale)
+
+            new_diff = scale * torch.abs(diff_AB)
+            weight = new_diff * (ratio*1.8)
+            mp[k] = (weight,)
+            theta_0.add_patches({k: mp[k]}, 1.0, 1.0)
+        return (theta_0,)
+
+class ModelMergeTrainDiffPixartSigmaXL2_1024MS(ModelMergeTrainDiff):
+    CATEGORY = 'Mikey/Model Merging/Model Specific'
+
+    @classmethod
+    def INPUT_TYPES(s):
+        arg_dict = {'model1': ('MODEL',),
+                    'model2': ('MODEL',),
+                    'model3': ('MODEL',)}
+
+        argument = ('FLOAT', {'default': 1.0, 'min': -10.0, 'max': 10.0, 'step': 0.01})
+
+        for i in range(28):
+            arg_dict['blocks.{}.'.format(i)] = argument
+
+        arg_dict['final_layer'] = argument
+        arg_dict['pos_embed'] = argument
+        arg_dict['t_block.1'] = argument
+        arg_dict['t_embedder'] = argument
+        arg_dict['x_embedder'] = argument
+        arg_dict['y_embedder'] = argument
+
+        return {'required': arg_dict}
+
+class CheckpointSaveModelOnly:
+    def __init__(self):
+        self.output_dir = folder_paths.get_output_directory()
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": { "model": ("MODEL",),
+                              "vae": ("VAE",),
+                              "filename_prefix": ("STRING", {"default": "checkpoints/ComfyUI"}),},
+                "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},}
+    RETURN_TYPES = ()
+    FUNCTION = "save"
+    OUTPUT_NODE = True
+
+    CATEGORY = "Mikey/Model Merging"
+
+    def save(self, model, vae, filename_prefix, clip=None, prompt=None, extra_pnginfo=None):
+        comfy_extras.nodes_model_merging.save_checkpoint(model, clip=clip, vae=vae, filename_prefix=filename_prefix, output_dir=self.output_dir, prompt=prompt, extra_pnginfo=extra_pnginfo)
+        return {}
 
 NODE_CLASS_MAPPINGS = {
     'Wildcard Processor': WildcardProcessor,
@@ -5281,7 +5399,11 @@ NODE_CLASS_MAPPINGS = {
     'MosaicExpandImage': MosaicExpandImage,
     'GetSubdirectories': GetSubdirectories,
     'TextPadderMikey': TextPadderMikey,
-    'SD3TextConditioningWithOptionsOnePrompt': SD3TextConditioningWithOptionsOnePrompt
+    'SD3TextConditioningWithOptionsOnePrompt': SD3TextConditioningWithOptionsOnePrompt,
+    'ModelMergePixArtSigmaXL2_1024MS': ModelMergePixArtSigmaXL2_1024MS,
+    'ModelMergeTrainDiff': ModelMergeTrainDiff,
+    'ModelMergeTrainDiffPixartSigmaXL2_1024MS': ModelMergeTrainDiffPixartSigmaXL2_1024MS,
+    'CheckpointSaveModelOnly': CheckpointSaveModelOnly,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -5352,5 +5474,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'MosaicExpandImage': 'Mosaic Expand Image (Mikey)',
     'GetSubdirectories': 'Get Subdirectories (Mikey)',
     'TextPadderMikey': 'Text Padder (Mikey)',
-    'SD3TextConditioningWithOptionsOnePrompt': 'SD3 Text Conditioning With Options. One Prompt (Mikey)'
+    'SD3TextConditioningWithOptionsOnePrompt': 'SD3 Text Conditioning With Options. One Prompt (Mikey)',
+    'ModelMergePixArtSigmaXL2_1024MS': 'Model Merge PixArtSigmaXL2_1024MS (Mikey)',
+    'ModelMergeTrainDiff': 'Train Diff (Mikey)',
+    'ModelMergeTrainDiffPixartSigmaXL2_1024MS': 'Train Diff PixArtSigmaXL2_1024MS (Mikey)',
+    'CheckpointSaveModelOnly': 'Save Model Only (Mikey)',
 }
