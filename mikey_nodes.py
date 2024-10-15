@@ -4988,7 +4988,7 @@ class MosaicExpandImage:
                              'bottom': ('INT', {'default': 0, 'min': 0, 'max': 5})}}
 
     RETURN_TYPES = ('IMAGE','MASK',)
-    RETURN_NAMES = ('result_img',)
+    RETURN_NAMES = ('result_img','result_mask',)
     FUNCTION = 'mosaic_expand'
     CATEGORY = 'Mikey/Image'
 
