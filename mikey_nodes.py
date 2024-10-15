@@ -4851,7 +4851,7 @@ class EvalFloats:
                              'b': ('FLOAT', {'default': 0.0}),
                              'formula': ('STRING', {'multiline': False, 'default': 'a + b'})}}
 
-    RETURN_TYPES = ('FLOAT',)
+    RETURN_TYPES = ('FLOAT','INT','STRING')
     RETURN_NAMES = ('result_float','result_int','result_str')
     FUNCTION = 'process'
     CATEGORY = 'Mikey/Math'
