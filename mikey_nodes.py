@@ -5218,7 +5218,7 @@ class SD3TextConditioningWithOptionsOnePrompt:
 # blocks.0 to 27
 # final_layer, pos_embed, t_block.1, t_embedder, x_embedder, y_embedder
 class ModelMergePixArtSigmaXL2_1024MS(comfy_extras.nodes_model_merging.ModelMergeBlocks):
-    CATEGORY = 'Mikey/Model Merging/model_specific'
+    CATEGORY = 'Mikey/Model Merging/Model Specific'
 
     @classmethod
     def INPUT_TYPES(s):
