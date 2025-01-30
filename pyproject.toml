@@ -1,7 +1,7 @@
 [project]
 name = "mikey_nodes"
 description = "Collection of convenient nodes. Wildcard, style, image, llm, haldclut, metadata, and more."
-version = "1.0.2"
+version = "1.0.3"
 license = { text = "MIT License" }
 
 [project.urls]
