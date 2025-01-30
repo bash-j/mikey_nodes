@@ -4178,6 +4178,25 @@ class TextConcat:
         text = delimiter.join(texts)
         return (text,)
 
+class RemoveTextBetween:
+    # removes text between two strings
+    # default start is <think> and end is </think>
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {'required': {'text': ('STRING', {'multiline': True, 'default': 'Input Text Here', 'dynamicPrompts': False})},
+                'optional': {'start': ('STRING', {'default': '<think>'}),
+                             'end': ('STRING', {'default': '</think>'})}}
+    
+    RETURN_TYPES = ('STRING',)
+    FUNCTION = 'remove'
+    CATEGORY = 'Mikey/Text'
+
+    def remove(self, text, start, end):
+        # search and replace
+        # remove text between start and end
+        text = re.sub(re.escape(start) + '.*?' + re.escape(end), '', text, flags=re.DOTALL).lstrip().rstrip()
+        return (text,)
+
 class OobaPrompt:
     @classmethod
     def INPUT_TYPES(s):
@@ -5390,6 +5409,7 @@ NODE_CLASS_MAPPINGS = {
     'SRFloatPromptInput': SRFloatPromptInput,
     'TextPreserve': TextPreserve,
     'TextConcat': TextConcat,
+    'RemoveTextBetween': RemoveTextBetween,
     'OobaPrompt': OobaPrompt,
     'WildcardOobaPrompt': WildcardOobaPrompt,
     'LMStudioPrompt': LMStudioPrompt,
@@ -5465,6 +5485,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     'SRFloatPromptInput': 'SR Float Prompt Input (Mikey)',
     'TextPreserve': 'Text Preserve (Mikey)',
     'TextConcat': 'Text Concat (Mikey)',
+    'RemoveTextBetween': 'Remove Text Between (Mikey)',
     'OobaPrompt': 'OobaPrompt (Mikey)',
     'WildcardOobaPrompt': 'Wildcard OobaPrompt (Mikey)',
     'LMStudioPrompt': 'LM Studio Prompt (Mikey)',
