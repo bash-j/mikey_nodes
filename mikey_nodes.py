@@ -3710,6 +3710,7 @@ class ImageCaption:
                     wrapped_lines.append(new_line)
                     new_line = word
             wrapped_lines.append(new_line)
+        wrapped_lines.append("")
         return wrapped_lines
 
     @apply_to_batch
@@ -4187,15 +4188,21 @@ class RemoveTextBetween:
                 'optional': {'start': ('STRING', {'default': '<think>'}),
                              'end': ('STRING', {'default': '</think>'})}}
     
-    RETURN_TYPES = ('STRING',)
+    RETURN_TYPES = ('STRING','STRING')
+    RETURN_NAMES = ('text','removed_text')
     FUNCTION = 'remove'
     CATEGORY = 'Mikey/Text'
 
     def remove(self, text, start, end):
         # search and replace
         # remove text between start and end
+        removed = re.findall(re.escape(start) + '(.*?)' + re.escape(end), text, flags=re.DOTALL)
         text = re.sub(re.escape(start) + '.*?' + re.escape(end), '', text, flags=re.DOTALL).lstrip().rstrip()
-        return (text,)
+        if len(removed) == 1:
+            removed_text = removed[0].lstrip().rstrip()
+        else:
+            removed_text = '\n'.join(removed)
+        return (text, removed_text)
 
 class OobaPrompt:
     @classmethod
