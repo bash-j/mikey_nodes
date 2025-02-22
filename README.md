@@ -223,9 +223,37 @@ Converts an integer to a string.
 
 Converts a float to a string.
 
-## Removed Nodes
+## Additional Nodes
 
-- VAE Decode 6GB
+The following nodes are newly added and not yet fully documented above:
+
+- **Range Float / Range Integer** – Generate numbers from a given range using the seed offset.
+- **Save Image If True** – Saves the image only when a given save condition is met.
+- **Batch Crop Image / Batch Crop Resize Inplace** – Process images in batches with cropping (and optional resizing).
+- **Batch Load Images / Load Image Based on Number** – Load images from a directory either as a batch or based on a seed index.
+- **LoraSyntaxProcessor / WildcardAndLoraSyntaxProcessor** – Process LoRA and wildcard syntax in prompts.
+- **Prompt With SDXL** – An alternative prompt node tailored for SDXL using style and prompt adjustments.
+- **Style Conditioner Base Only** – Injects style prompt conditioning into the base clip only.
+- **Mikey Sampler Tiled Advanced / Mikey Sampler Tiled Advanced Base Only / Mikey Sampler Base Only Advanced** – Advanced variations of the sampler nodes with refined control.
+- **MikeyLatentTileSampler / MikeyLatentTileSamplerCustom** – Perform tiling in latent space for upscaling.
+- **FaceFixerOpenCV** – Detect and fix faces using OpenCV.
+- **SearchAndReplace** – Searches a text for placeholders and replaces them.
+- **FileNamePrefix / FileNamePrefixDateDirFirst** – Generate filename prefixes for saving images with metadata.
+- **ImageBorder / ImagePaste** – Add borders to or paste images together.
+- **TextCombinations2 / TextCombinations3 / Text2InputOr3rdOption** – Combine multiple text inputs in various ways.
+- **Checkpoint Loader Simple Mikey / CheckpointHash** – Load checkpoints and compute their file hashes.
+- **SRStringPromptInput / SRIntPromptInput / SRFloatPromptInput** – Add prompt-related inputs with different data types.
+- **TextPreserve / TextConcat / RemoveTextBetween** – Manipulate and combine text strings.
+- **OobaPrompt / WildcardOobaPrompt / LMStudioPrompt** – Prompt processing nodes that integrate with external LLM services.
+- **EvalFloats** – Evaluate mathematical expressions given two floats.
+- **ImageOverlay / CinematicLook / MosaicExpandImage** – Various nodes for merging and stylizing images.
+- **GetSubdirectories** – Retrieve subdirectories from a given directory.
+- **TextPadderMikey** – Pad text to a fixed length.
+- **SD3TextConditioningWithOptionsOnePrompt** – Text conditioning with additional configurable options.
+- **ModelMergePixArtSigmaXL2_1024MS / ModelMergeTrainDiff / ModelMergeTrainDiffPixartSigmaXL2_1024MS** – Nodes for merging models.
+- **CheckpointSaveModelOnly** – Save checkpoints without additional output.
+
+Feel free to expand the descriptions as you update each node.
 
 ## Installation
 
