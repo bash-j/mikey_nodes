@@ -24,21 +24,9 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 import folder_paths
-file_path = os.path.join(os.path.dirname(folder_paths.__file__), 'comfy_extras/nodes_clip_sdxl.py')
-module_name = "nodes_clip_sdxl"
-spec = importlib.util.spec_from_file_location(module_name, file_path)
-module = importlib.util.module_from_spec(spec)
-sys.modules[module_name] = module
-spec.loader.exec_module(module)
-from nodes_clip_sdxl import CLIPTextEncodeSDXL, CLIPTextEncodeSDXLRefiner
-file_path = os.path.join(os.path.dirname(folder_paths.__file__), 'comfy_extras/nodes_upscale_model.py')
-module_name = "nodes_upscale_model"
-spec = importlib.util.spec_from_file_location(module_name, file_path)
-module = importlib.util.module_from_spec(spec)
-sys.modules[module_name] = module
-spec.loader.exec_module(module)
+from comfy_extras.nodes_clip_sdxl import CLIPTextEncodeSDXL, CLIPTextEncodeSDXLRefiner
 import comfy_extras
-from nodes_upscale_model import UpscaleModelLoader, ImageUpscaleWithModel
+from comfy_extras.nodes_upscale_model import UpscaleModelLoader, ImageUpscaleWithModel
 from comfy.model_management import soft_empty_cache, free_memory, get_torch_device, current_loaded_models, load_model_gpu
 from nodes import LoraLoader, ConditioningAverage, common_ksampler, ImageScale, ImageScaleBy, VAEEncode, VAEDecode
 import comfy.utils
@@ -142,6 +130,9 @@ def read_ratios():
     ratio_dict = data['ratios']
     # user_styles.json
     user_styles_path = os.path.join(folder_paths.get_user_directory(), 'user_ratios.json')
+    # backwards compatibility with pre paths update to comfy
+    if not os.path.isfile(user_styles_path):
+        user_styles_path = os.path.join(os.path.dirname(folder_paths.__file__), 'user_ratios.json')
     # check if file exists
     if os.path.isfile(user_styles_path):
         # read json and update ratio_dict
@@ -161,6 +152,9 @@ def read_ratio_presets():
     ratio_preset_dict = data['ratio_presets']
     # user_ratio_presets.json
     user_ratio_presets_path = os.path.join(folder_paths.get_user_directory(), 'user_ratio_presets.json')
+    # backwards compatibility with pre paths update to comfy
+    if not os.path.isfile(user_ratio_presets_path):
+        user_ratio_presets_path = os.path.join(os.path.dirname(folder_paths.__file__), 'user_ratio_presets.json')
     # check if file exists
     if os.path.isfile(user_ratio_presets_path):
         # read json and update ratio_dict
@@ -199,6 +193,9 @@ def read_styles():
         neg_style[style] = data['styles'][style]['negative']
     # user_styles.json
     user_styles_path = os.path.join(folder_paths.get_user_directory(), 'user_styles.json')
+    # backwards compatibility with pre paths update to comfy
+    if not os.path.isfile(user_styles_path):
+        user_styles_path = os.path.join(os.path.dirname(folder_paths.__file__), 'user_styles.json')
     # check if file exists
     if os.path.isfile(user_styles_path):
         # read json and update pos_style and neg_style
@@ -223,6 +220,9 @@ def read_styles():
 def find_and_replace_wildcards(prompt, offset_seed, debug=False):
     # wildcards use the __file_name__ syntax with optional |word_to_find
     wildcard_path = os.path.join(folder_paths.get_user_directory(), 'wildcards')
+    # backwards compatibility with pre paths update to comfy
+    if not os.path.isdir(wildcard_path):
+        wildcard_path = os.path.join(os.path.dirname(folder_paths.__file__), 'wildcards')
     wildcard_regex = r'((\d+)\$\$)?__(!|\+|-|\*)?((?:[^|_]+_)*[^|_]+)((?:\|[^|]+)*)__'
     # r'(\[(\d+)\$\$)?__((?:[^|_]+_)*[^|_]+)((?:\|[^|]+)*)__\]?'
     match_strings = []
