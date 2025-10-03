@@ -24,15 +24,108 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 import folder_paths
-from comfy_extras.nodes_clip_sdxl import CLIPTextEncodeSDXL, CLIPTextEncodeSDXLRefiner
 import comfy_extras
-from comfy_extras.nodes_upscale_model import UpscaleModelLoader, ImageUpscaleWithModel
-from comfy.model_management import soft_empty_cache, free_memory, get_torch_device, current_loaded_models, load_model_gpu
+from spandrel import ModelLoader, ImageModelDescriptor
+from comfy import model_management
 from nodes import LoraLoader, ConditioningAverage, common_ksampler, ImageScale, ImageScaleBy, VAEEncode, VAEDecode
 import comfy.utils
-from comfy_extras.chainner_models import model_loading
-from comfy_extras.nodes_custom_sampler import Noise_EmptyNoise, Noise_RandomNoise
-from comfy import model_management, model_base
+
+# region COMFY_EXTRAS 
+def CLIPTextEncodeSDXLRefiner_encode(clip, ascore, width, height, text):
+    tokens = clip.tokenize(text)
+    return (clip.encode_from_tokens_scheduled(tokens, add_dict={"aesthetic_score": ascore, "width": width, "height": height}), )
+
+def CLIPTextEncodeSDXL_encode(clip, width, height, crop_w, crop_h, target_width, target_height, text_g, text_l):
+    tokens = clip.tokenize(text_g)
+    tokens["l"] = clip.tokenize(text_l)["l"]
+    if len(tokens["l"]) != len(tokens["g"]):
+        empty = clip.tokenize("")
+        while len(tokens["l"]) < len(tokens["g"]):
+            tokens["l"] += empty["l"]
+        while len(tokens["l"]) > len(tokens["g"]):
+            tokens["g"] += empty["g"]
+    return (clip.encode_from_tokens_scheduled(tokens, add_dict={"width": width, "height": height, "crop_w": crop_w, "crop_h": crop_h, "target_width": target_width, "target_height": target_height}), )
+
+class UpscaleModelLoader:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": { "model_name": (folder_paths.get_filename_list("upscale_models"), ),
+                             }}
+    RETURN_TYPES = ("UPSCALE_MODEL",)
+    FUNCTION = "load_model"
+
+    CATEGORY = "loaders"
+
+    def load_model(self, model_name):
+        model_path = folder_paths.get_full_path_or_raise("upscale_models", model_name)
+        sd = comfy.utils.load_torch_file(model_path, safe_load=True)
+        if "module.layers.0.residual_group.blocks.0.norm1.weight" in sd:
+            sd = comfy.utils.state_dict_prefix_replace(sd, {"module.":""})
+        out = ModelLoader().load_from_state_dict(sd).eval()
+
+        if not isinstance(out, ImageModelDescriptor):
+            raise Exception("Upscale model must be a single-image model.")
+
+        return (out, )
+
+class ImageUpscaleWithModel:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": { "upscale_model": ("UPSCALE_MODEL",),
+                              "image": ("IMAGE",),
+                              }}
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "upscale"
+
+    CATEGORY = "image/upscaling"
+
+    def upscale(self, upscale_model, image):
+        device = model_management.get_torch_device()
+
+        memory_required = model_management.module_size(upscale_model.model)
+        memory_required += (512 * 512 * 3) * image.element_size() * max(upscale_model.scale, 1.0) * 384.0 #The 384.0 is an estimate of how much some of these models take, TODO: make it more accurate
+        memory_required += image.nelement() * image.element_size()
+        model_management.free_memory(memory_required, device)
+
+        upscale_model.to(device)
+        in_img = image.movedim(-1,-3).to(device)
+
+        tile = 512
+        overlap = 32
+
+        oom = True
+        while oom:
+            try:
+                steps = in_img.shape[0] * comfy.utils.get_tiled_scale_steps(in_img.shape[3], in_img.shape[2], tile_x=tile, tile_y=tile, overlap=overlap)
+                pbar = comfy.utils.ProgressBar(steps)
+                s = comfy.utils.tiled_scale(in_img, lambda a: upscale_model(a), tile_x=tile, tile_y=tile, overlap=overlap, upscale_amount=upscale_model.scale, pbar=pbar)
+                oom = False
+            except model_management.OOM_EXCEPTION as e:
+                tile //= 2
+                if tile < 128:
+                    raise e
+
+        upscale_model.to("cpu")
+        s = torch.clamp(s.movedim(-3,-1), min=0, max=1.0)
+        return (s,)
+
+class Noise_EmptyNoise:
+    def __init__(self):
+        self.seed = 0
+
+    def generate_noise(self, input_latent):
+        latent_image = input_latent["samples"]
+        return torch.zeros(latent_image.shape, dtype=latent_image.dtype, layout=latent_image.layout, device="cpu")
+
+class Noise_RandomNoise:
+    def __init__(self, seed):
+        self.seed = seed
+
+    def generate_noise(self, input_latent):
+        latent_image = input_latent["samples"]
+        batch_inds = input_latent["batch_index"] if "batch_index" in input_latent else None
+        return comfy.sample.prepare_noise(latent_image, self.seed, batch_inds)
+# end region
 
 def calculate_file_hash(file_path):
     # open the file in binary mode
@@ -1816,6 +1909,8 @@ class PromptWithStyleV2:
     FUNCTION = 'start'
     CATEGORY = 'Mikey'
 
+
+
     def start(self, clip_base, clip_refiner, positive_prompt, negative_prompt, style, ratio_selected, batch_size, seed):
         """ get output from PromptWithStyle.start """
         (latent,
@@ -1835,10 +1930,10 @@ class PromptWithStyleV2:
         #     'Target Width:', target_width, 'Target Height:', target_height,
         #     'Refiner Width:', refiner_width, 'Refiner Height:', refiner_height)
         # encode text
-        sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base, width, height, 0, 0, target_width, target_height, pos_prompt, pos_style)[0]
-        sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base, width, height, 0, 0, target_width, target_height, neg_prompt, neg_style)[0]
-        refiner_pos_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width, refiner_height, pos_prompt)[0]
-        refiner_neg_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width, refiner_height, neg_prompt)[0]
+        sdxl_pos_cond = CLIPTextEncodeSDXL_encode(clip_base, width, height, 0, 0, target_width, target_height, pos_prompt, pos_style)[0]
+        sdxl_neg_cond = CLIPTextEncodeSDXL_encode(clip_base, width, height, 0, 0, target_width, target_height, neg_prompt, neg_style)[0]
+        refiner_pos_cond = CLIPTextEncodeSDXLRefiner_encode(clip_refiner, 6, refiner_width, refiner_height, pos_prompt)[0]
+        refiner_neg_cond = CLIPTextEncodeSDXLRefiner_encode(clip_refiner, 2.5, refiner_width, refiner_height, neg_prompt)[0]
         # return
         return (latent,
                 sdxl_pos_cond, sdxl_neg_cond,
@@ -2117,10 +2212,10 @@ class PromptWithStyleV3:
             # encode text
             add_metadata_to_dict(prompt_with_style, style=style_, clip_g_positive=pos_prompt, clip_l_positive=pos_style_)
             add_metadata_to_dict(prompt_with_style, clip_g_negative=neg_prompt, clip_l_negative=neg_style_)
-            sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base_pos, width, height, 0, 0, target_width, target_height, pos_prompt_, pos_style_)[0]
-            sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base_neg, width, height, 0, 0, target_width, target_height, neg_prompt_, neg_style_)[0]
-            refiner_pos_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width, refiner_height, pos_prompt_)[0]
-            refiner_neg_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width, refiner_height, neg_prompt_)[0]
+            sdxl_pos_cond = CLIPTextEncodeSDXL_encode(clip_base_pos, width, height, 0, 0, target_width, target_height, pos_prompt_, pos_style_)[0]
+            sdxl_neg_cond = CLIPTextEncodeSDXL_encode(clip_base_neg, width, height, 0, 0, target_width, target_height, neg_prompt_, neg_style_)[0]
+            refiner_pos_cond = CLIPTextEncodeSDXLRefiner_encode(clip_refiner, 6, refiner_width, refiner_height, pos_prompt_)[0]
+            refiner_neg_cond = CLIPTextEncodeSDXLRefiner_encode(clip_refiner, 2.5, refiner_width, refiner_height, neg_prompt_)[0]
             #prompt.get(str(unique_id))['inputs']['output_positive_prompt'] = pos_prompt_
             #prompt.get(str(unique_id))['inputs']['output_negative_prompt'] = neg_prompt_
             #prompt.get(str(unique_id))['inputs']['output_latent_width'] = width
@@ -2166,10 +2261,10 @@ class PromptWithStyleV3:
             # encode text
             add_metadata_to_dict(prompt_with_style, style=style_, clip_g_positive=pos_prompt_, clip_l_positive=pos_style_)
             add_metadata_to_dict(prompt_with_style, clip_g_negative=neg_prompt_, clip_l_negative=neg_style_)
-            base_pos_conds.append(CLIPTextEncodeSDXL.encode(self, clip_base_pos, width_, height_, 0, 0, target_width, target_height, pos_prompt_, pos_style_)[0])
-            base_neg_conds.append(CLIPTextEncodeSDXL.encode(self, clip_base_neg, width_, height_, 0, 0, target_width, target_height, neg_prompt_, neg_style_)[0])
-            refiner_pos_conds.append(CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width_, refiner_height_, pos_prompt_)[0])
-            refiner_neg_conds.append(CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width_, refiner_height_, neg_prompt_)[0])
+            base_pos_conds.append(CLIPTextEncodeSDXL_encode(clip_base_pos, width_, height_, 0, 0, target_width, target_height, pos_prompt_, pos_style_)[0])
+            base_neg_conds.append(CLIPTextEncodeSDXL_encode(clip_base_neg, width_, height_, 0, 0, target_width, target_height, neg_prompt_, neg_style_)[0])
+            refiner_pos_conds.append(CLIPTextEncodeSDXLRefiner_encode(clip_refiner, 6, refiner_width_, refiner_height_, pos_prompt_)[0])
+            refiner_neg_conds.append(CLIPTextEncodeSDXLRefiner_encode(clip_refiner, 2.5, refiner_width_, refiner_height_, neg_prompt_)[0])
         # if none of the styles matched we will get an empty list so we need to check for that again
         if len(base_pos_conds) == 0:
             style_ = 'none'
@@ -2180,10 +2275,10 @@ class PromptWithStyleV3:
             # encode text
             add_metadata_to_dict(prompt_with_style, style=style_, clip_g_positive=pos_prompt_, clip_l_positive=pos_style_)
             add_metadata_to_dict(prompt_with_style, clip_g_negative=neg_prompt_, clip_l_negative=neg_style_)
-            sdxl_pos_cond = CLIPTextEncodeSDXL.encode(self, clip_base_pos, width, height, 0, 0, target_width, target_height, pos_prompt_, pos_style_)[0]
-            sdxl_neg_cond = CLIPTextEncodeSDXL.encode(self, clip_base_neg, width, height, 0, 0, target_width, target_height, neg_prompt_, neg_style_)[0]
-            refiner_pos_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 6, refiner_width, refiner_height, pos_prompt_)[0]
-            refiner_neg_cond = CLIPTextEncodeSDXLRefiner.encode(self, clip_refiner, 2.5, refiner_width, refiner_height, neg_prompt_)[0]
+            sdxl_pos_cond = CLIPTextEncodeSDXL_encode(clip_base_pos, width, height, 0, 0, target_width, target_height, pos_prompt_, pos_style_)[0]
+            sdxl_neg_cond = CLIPTextEncodeSDXL_encode(clip_base_neg, width, height, 0, 0, target_width, target_height, neg_prompt_, neg_style_)[0]
+            refiner_pos_cond = CLIPTextEncodeSDXLRefiner_encode(clip_refiner, 6, refiner_width, refiner_height, pos_prompt_)[0]
+            refiner_neg_cond = CLIPTextEncodeSDXLRefiner_encode(clip_refiner, 2.5, refiner_width, refiner_height, neg_prompt_)[0]
             #prompt.get(str(unique_id))['inputs']['output_positive_prompt'] = pos_prompt_
             #prompt.get(str(unique_id))['inputs']['output_negative_prompt'] = neg_prompt_
             #prompt.get(str(unique_id))['inputs']['output_latent_width'] = width
@@ -2388,10 +2483,10 @@ class StyleConditioner:
         if style == 'none':
             return (positive_cond_base, negative_cond_base, positive_cond_refiner, negative_cond_refiner, style, )
         # encode the style prompt
-        positive_cond_base_new = CLIPTextEncodeSDXL.encode(self, base_clip, 1024, 1024, 0, 0, 1024, 1024, pos_prompt, pos_prompt)[0]
-        negative_cond_base_new = CLIPTextEncodeSDXL.encode(self, base_clip, 1024, 1024, 0, 0, 1024, 1024, neg_prompt, neg_prompt)[0]
-        positive_cond_refiner_new = CLIPTextEncodeSDXLRefiner.encode(self, refiner_clip, 6, 4096, 4096, pos_prompt)[0]
-        negative_cond_refiner_new = CLIPTextEncodeSDXLRefiner.encode(self, refiner_clip, 2.5, 4096, 4096, neg_prompt)[0]
+        positive_cond_base_new = CLIPTextEncodeSDXL_encode(base_clip, 1024, 1024, 0, 0, 1024, 1024, pos_prompt, pos_prompt)[0]
+        negative_cond_base_new = CLIPTextEncodeSDXL_encode(base_clip, 1024, 1024, 0, 0, 1024, 1024, neg_prompt, neg_prompt)[0]
+        positive_cond_refiner_new = CLIPTextEncodeSDXLRefiner_encode(refiner_clip, 6, 4096, 4096, pos_prompt)[0]
+        negative_cond_refiner_new = CLIPTextEncodeSDXLRefiner_encode(refiner_clip, 2.5, 4096, 4096, neg_prompt)[0]
         # average the style prompt with the existing conditioning
         positive_cond_base = ConditioningAverage.addWeighted(self, positive_cond_base_new, positive_cond_base, strength)[0]
         negative_cond_base = ConditioningAverage.addWeighted(self, negative_cond_base_new, negative_cond_base, strength)[0]
@@ -2430,8 +2525,8 @@ class StyleConditionerBaseOnly:
         if style == 'none':
             return (positive_cond_base, negative_cond_base, style, )
         # encode the style prompt
-        positive_cond_base_new = CLIPTextEncodeSDXL.encode(self, base_clip, 1024, 1024, 0, 0, 1024, 1024, pos_prompt, pos_prompt)[0]
-        negative_cond_base_new = CLIPTextEncodeSDXL.encode(self, base_clip, 1024, 1024, 0, 0, 1024, 1024, neg_prompt, neg_prompt)[0]
+        positive_cond_base_new = CLIPTextEncodeSDXL_encode(base_clip, 1024, 1024, 0, 0, 1024, 1024, pos_prompt, pos_prompt)[0]
+        negative_cond_base_new = CLIPTextEncodeSDXL_encode(base_clip, 1024, 1024, 0, 0, 1024, 1024, neg_prompt, neg_prompt)[0]
         # average the style prompt with the existing conditioning
         positive_cond_base = ConditioningAverage.addWeighted(self, positive_cond_base_new, positive_cond_base, strength)[0]
         negative_cond_base = ConditioningAverage.addWeighted(self, negative_cond_base_new, negative_cond_base, strength)[0]
