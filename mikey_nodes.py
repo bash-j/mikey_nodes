@@ -2436,6 +2436,7 @@ class WildcardAndLoraSyntaxProcessor:
         return model, clip, stripped_text
 
     def process(self, model, clip, text, seed, extra_pnginfo=None, prompt=None):
+        original_seed = seed
         # search and replace
         text = search_and_replace(text, extra_pnginfo, prompt)
         # process random syntax
@@ -2450,6 +2451,8 @@ class WildcardAndLoraSyntaxProcessor:
         model, clip, stripped_text = self.extract_and_load_loras(text_, model, clip)
         # process wildcards again
         stripped_text = find_and_replace_wildcards(stripped_text, seed, True)
+        # process dynamic prompt brackets after wildcards (deterministic behavior based on the original seed)
+        stripped_text = process_wildcard_syntax(stripped_text, original_seed)
         return (model, clip, stripped_text, text_, )
 
 class StyleConditioner:
