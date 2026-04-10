@@ -3981,7 +3981,7 @@ class ImagePaste:
         return (pil2tensor(background_image),)
 
 class TextCombinations2:
-    texts = ['text1', 'text2', 'text1 + text2']
+    texts = ['text1', 'text2', 'text1 + text2', 'text2 + text1']
     outputs = ['output1','output2']
 
     @classmethod
@@ -3997,7 +3997,8 @@ class TextCombinations2:
         cls.operations = cls.generate_combinations(cls.texts, cls.outputs)
         return {'required': {'text1': ('STRING', {'multiline': True, 'default': 'Text 1'}),
                              'text2': ('STRING', {'multiline': True, 'default': 'Text 2'}),
-                             'operation': (cls.operations, {'default':cls.operations[0]}),
+                             'output_1_contents': (cls.operations, {'default':cls.operations[0]}),
+                             'output_2_contents': (cls.operations, {'default':cls.operations[1] if len(cls.operations) > 1 else cls.operations[0]}),
                              'delimiter': ('STRING', {'default': ' '}),
                              'use_seed': (['true','false'], {'default': 'false'}),
                              'seed': ('INT', {'default': 0, 'min': 0, 'max': 0xffffffffffffffff})},
@@ -4008,36 +4009,39 @@ class TextCombinations2:
     FUNCTION = 'mix'
     CATEGORY = 'Mikey/Text'
 
-    def mix(self, text1, text2, operation, delimiter, use_seed, seed, extra_pnginfo, prompt):
+    def mix(self, text1, text2, output_1_contents, output_2_contents, delimiter, use_seed, seed, extra_pnginfo, prompt):
         # search and replace
         text1 = search_and_replace(text1, extra_pnginfo, prompt)
         text2 = search_and_replace(text2, extra_pnginfo, prompt)
 
         text_dict = {'text1': text1, 'text2': text2}
+        
+        # Process output_1_contents
         if use_seed == 'true' and len(self.operations) > 0:
             offset = seed % len(self.operations)
-            operation = self.operations[offset]
+            output_1_contents = self.operations[offset]
+            # Adjust offset for output_2 to be different
+            offset_2 = (offset + 1) % len(self.operations)
+            output_2_contents = self.operations[offset_2]
 
-        # Parsing the operation string
-        ops = operation.split(", ")
-        output_texts = [op.split(" to ")[0] for op in ops]
-
-        # Generate the outputs
+        # Generate outputs
         outputs = []
-
-        for output_text in output_texts:
+        
+        for output_content in [output_1_contents, output_2_contents]:
             # Split the string by '+' to identify individual text components
-            components = output_text.split(" + ")
-
+            components = output_content.split(" + ")
+            
             # Generate the final string for each output
             final_output = delimiter.join(eval(comp, {}, text_dict) for comp in components)
-
+            
             outputs.append(final_output)
 
         return tuple(outputs)
 
 class TextCombinations3:
-    texts = ['text1', 'text2', 'text3', 'text1 + text2', 'text1 + text3', 'text2 + text3', 'text1 + text2 + text3']
+    texts = ['text1', 'text2', 'text3', 'text1 + text2', 'text1 + text3', 'text2 + text3', 'text1 + text2 + text3',
+             'text2 + text1', 'text3 + text1', 'text3 + text2', 'text2 + text3 + text1', 'text3 + text1 + text2', 
+             'text3 + text2 + text1', 'text1 + text3 + text2']
     outputs = ['output1','output2','output3']
 
     @classmethod
@@ -4054,7 +4058,9 @@ class TextCombinations3:
         return {'required': {'text1': ('STRING', {'multiline': True, 'default': 'Text 1'}),
                              'text2': ('STRING', {'multiline': True, 'default': 'Text 2'}),
                              'text3': ('STRING', {'multiline': True, 'default': 'Text 3'}),
-                             'operation': (cls.operations, {'default':cls.operations[0]}),
+                             'output_1_contents': (cls.operations, {'default':cls.operations[0]}),
+                             'output_2_contents': (cls.operations, {'default':cls.operations[1] if len(cls.operations) > 1 else cls.operations[0]}),
+                             'output_3_contents': (cls.operations, {'default':cls.operations[2] if len(cls.operations) > 2 else cls.operations[0]}),
                              'delimiter': ('STRING', {'default': ' '}),
                              'use_seed': (['true','false'], {'default': 'false'}),
                              'seed': ('INT', {'default': 0, 'min': 0, 'max': 0xffffffffffffffff})},
@@ -4065,31 +4071,35 @@ class TextCombinations3:
     FUNCTION = 'mix'
     CATEGORY = 'Mikey/Text'
 
-    def mix(self, text1, text2, text3, operation, delimiter, use_seed, seed, extra_pnginfo, prompt):
+    def mix(self, text1, text2, text3, output_1_contents, output_2_contents, output_3_contents, delimiter, use_seed, seed, extra_pnginfo, prompt):
         # search and replace
         text1 = search_and_replace(text1, extra_pnginfo, prompt)
         text2 = search_and_replace(text2, extra_pnginfo, prompt)
         text3 = search_and_replace(text3, extra_pnginfo, prompt)
 
         text_dict = {'text1': text1, 'text2': text2, 'text3': text3}
+        
+        # Process outputs with seed support
         if use_seed == 'true' and len(self.operations) > 0:
             offset = seed % len(self.operations)
-            operation = self.operations[offset]
+            output_1_contents = self.operations[offset]
+            # Offset for output_2 to be different
+            offset_2 = (offset + 1) % len(self.operations)
+            output_2_contents = self.operations[offset_2]
+            # Offset for output_3 to be different
+            offset_3 = (offset + 2) % len(self.operations)
+            output_3_contents = self.operations[offset_3]
 
-        # Parsing the operation string
-        ops = operation.split(", ")
-        output_texts = [op.split(" to ")[0] for op in ops]
-
-        # Generate the outputs
+        # Generate outputs
         outputs = []
-
-        for output_text in output_texts:
+        
+        for output_content in [output_1_contents, output_2_contents, output_3_contents]:
             # Split the string by '+' to identify individual text components
-            components = output_text.split(" + ")
-
+            components = output_content.split(" + ")
+            
             # Generate the final string for each output
             final_output = delimiter.join(eval(comp, {}, text_dict) for comp in components)
-
+            
             outputs.append(final_output)
 
         return tuple(outputs)
