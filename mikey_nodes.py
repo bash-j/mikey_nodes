@@ -1502,18 +1502,32 @@ class SaveImagesMikeyML:
 
     def _get_initial_counter(self, files, full_output_folder, counter_type, filename_separator, counter_pos, filename_texts):
         counter = 1
-        if counter_type == "folder":
-            if files:
-                for f in files:
-                    if filename_separator in f:
-                        try:
-                            counter = max(counter, int(f.split(filename_separator)[counter_pos]) + 1)
-                        except:
-                            counter = 1
-                            break
-            else:
-                counter = 1
-        elif counter_type == "filename":
+
+        if counter_type == 'folder':
+            for f in files:
+                if filename_separator not in f:
+                    continue
+
+                parts = f.split(filename_separator)
+
+                # counter_pos is 0-based in this node's implementation
+                idx = counter_pos
+                if idx < 0 or idx >= len(parts):
+                    continue
+
+                val = parts[idx]
+
+                # Remove supported image file extensions
+                for ext in ('.png', '.jpg', '.jpeg', '.webp'):
+                    if val.lower().endswith(ext):
+                        val = val[:-len(ext)]
+                        break
+
+                # Ignore malformed entries instead of resetting the counter
+                if val.isdigit():
+                    counter = max(counter, int(val) + 1)
+
+        elif counter_type == 'filename':
             for f in files:
                 f_split = f.split(filename_separator)
                 # strip .png from strings
@@ -1523,8 +1537,8 @@ class SaveImagesMikeyML:
                 )
                 if matched_texts:
                     counter += 1
-        return counter
 
+        return counter
     def _get_next_counter(self, full_output_folder, filename_base, counter):
         """Checks for the next available counter value."""
         while True:
